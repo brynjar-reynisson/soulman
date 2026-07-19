@@ -270,6 +270,36 @@ func TestLoad_SystemMonitorFields(t *testing.T) {
 	}
 }
 
+func TestLoad_SystemMonitorServiceHealthFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	content := `{
+		"watch_paths": ["C:\\a\\errors"],
+		"system_monitor": {
+			"poll_interval_seconds": 300,
+			"checks": [
+				{"type": "service_health", "name": "agent-suite-backend", "target": "http://localhost:8091/health"}
+			]
+		}
+	}`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cfg, err := sharedconfig.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if len(cfg.SystemMonitor.Checks) != 1 {
+		t.Fatalf("SystemMonitor.Checks = %d entries, want 1", len(cfg.SystemMonitor.Checks))
+	}
+	svc := cfg.SystemMonitor.Checks[0]
+	if svc.Type != "service_health" || svc.Name != "agent-suite-backend" || svc.Target != "http://localhost:8091/health" {
+		t.Errorf("Checks[0] = %+v, want service_health agent-suite-backend http://localhost:8091/health", svc)
+	}
+}
+
 func TestLoad_MissingSystemMonitorField_ZeroValue(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
