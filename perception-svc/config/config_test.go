@@ -18,7 +18,9 @@ type gmailFields struct {
 type checkFields struct {
 	Type                     string  `json:"type"`
 	Path                     string  `json:"path,omitempty"`
-	WarningThresholdPercent  float64 `json:"warning_threshold_percent"`
+	Name                     string  `json:"name,omitempty"`
+	Target                   string  `json:"target,omitempty"`
+	WarningThresholdPercent  float64 `json:"warning_threshold_percent,omitempty"`
 	CriticalThresholdPercent float64 `json:"critical_threshold_percent,omitempty"`
 }
 
@@ -427,5 +429,59 @@ func TestLoad_ValidMemoryAndCPUChecks_NoPathRequired(t *testing.T) {
 
 	if _, err := config.Load(); err != nil {
 		t.Fatalf("Load: want no error for valid memory/cpu checks without path, got %v", err)
+	}
+}
+
+func TestLoad_ServiceHealthCheckMissingName_ReturnsError(t *testing.T) {
+	unsetAllEnv()
+	defer unsetAllEnv()
+
+	sysMon := validSystemMonitor
+	sysMon.Checks = []checkFields{{Type: "service_health", Target: "localhost:5176"}}
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon)
+	os.Setenv("CONFIG_PATH", configPath)
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("Load: want error for service_health check with no name, got nil")
+	}
+}
+
+func TestLoad_ServiceHealthCheckMissingTarget_ReturnsError(t *testing.T) {
+	unsetAllEnv()
+	defer unsetAllEnv()
+
+	sysMon := validSystemMonitor
+	sysMon.Checks = []checkFields{{Type: "service_health", Name: "agent-suite-backend"}}
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon)
+	os.Setenv("CONFIG_PATH", configPath)
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("Load: want error for service_health check with no target, got nil")
+	}
+}
+
+func TestLoad_ValidServiceHealthCheck_NoThresholdRequired(t *testing.T) {
+	unsetAllEnv()
+	defer unsetAllEnv()
+
+	sysMon := validSystemMonitor
+	sysMon.Checks = []checkFields{
+		{Type: "service_health", Name: "agent-suite-backend", Target: "http://localhost:8091/health"},
+		{Type: "service_health", Name: "digital-me-frontend", Target: "localhost:5173"},
+	}
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon)
+	os.Setenv("CONFIG_PATH", configPath)
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load: want no error for valid service_health checks without thresholds, got %v", err)
+	}
+	if len(cfg.SystemMonitorChecks) != 2 {
+		t.Fatalf("SystemMonitorChecks = %d entries, want 2", len(cfg.SystemMonitorChecks))
+	}
+	if cfg.SystemMonitorChecks[0].Name != "agent-suite-backend" || cfg.SystemMonitorChecks[0].Target != "http://localhost:8091/health" {
+		t.Errorf("SystemMonitorChecks[0] = %+v, want agent-suite-backend/http://localhost:8091/health", cfg.SystemMonitorChecks[0])
 	}
 }
