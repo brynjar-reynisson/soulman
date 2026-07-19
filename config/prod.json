@@ -1,0 +1,37 @@
+{
+  "watch_paths": [
+    "C:\\Users\\Lenovo\\DigitalMe\\errors"
+  ],
+  "nats_url": "nats://localhost:4222",
+  "stimulus_subject": "soulman.stimulus.raw",
+  "thinking_request_subject": "soulman.thinking.request",
+  "memory_write_subject": "soulman.memory.write",
+  "feign_mode": true,
+  "consumer_names": {
+    "memory_svc": "memory-svc",
+    "memory_svc_episodes": "memory-svc-episodes",
+    "thinking_svc": "thinking-svc",
+    "action_svc": "action-svc"
+  },
+  "gmail": {
+    "query": "in:inbox is:unread -label:soulman/seen after:2026/07/17",
+    "seen_label": "soulman/seen",
+    "poll_interval_seconds": 60
+  },
+  "system_monitor": {
+    "poll_interval_seconds": 300,
+    "checks": [
+      { "type": "disk_space", "path": "C:\\", "warning_threshold_percent": 80, "critical_threshold_percent": 95 },
+      { "type": "memory", "warning_threshold_percent": 85 },
+      { "type": "cpu", "warning_threshold_percent": 90 }
+    ]
+  },
+  "web": {
+    "owner_email": "breynisson@gmail.com",
+    "cors_allowed_origin": "http://localhost:5191",
+    "perception_svc_url": "http://localhost:9001",
+    "memory_svc_url": "http://localhost:9002",
+    "thinking_svc_url": "http://localhost:9003",
+    "action_svc_url": "http://localhost:9004"
+  }
+}

@@ -1,0 +1,1 @@
+| **Python MCP** | `soulman-memory-mcp-server.py` (thin adapter) → `soulman_memory.MemoryStore` (engine) | Deterministic store/retrieve/replay/health. MCP adapter delegates; engine owns connection pool + logic. |

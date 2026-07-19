@@ -1,0 +1,11 @@
+.obsidian
+.trash
+.worktrees
+.claude
+install.log
+
+# Runtime artifacts a service can accidentally write here if launched with
+# its working directory inside a service folder (checkpoint/state files,
+# built binaries) — these belong in soulman-dev/soulman-prod, never committed.
+checkpoints.json
+*.exe
