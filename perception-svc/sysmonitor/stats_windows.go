@@ -15,9 +15,10 @@ import (
 // New builds a Watcher backed by real Windows system calls
 // (golang.org/x/sys/windows — already an indirect dependency of this
 // module via oauth2/nats.go, promoted to direct for this package) for
-// disk, memory, and CPU statistics.
+// disk, memory, and CPU statistics, and a real TCP/HTTP client for
+// service_health checks.
 func New(checks []CheckConfig, publisher Publisher, interval time.Duration) *Watcher {
-	return newWatcher(&winStats{}, checks, publisher, interval)
+	return newWatcher(&winStats{}, httpTCPHealthChecker{}, checks, publisher, interval)
 }
 
 // winStats implements statsProvider. CPU usage needs the previous poll's
