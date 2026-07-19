@@ -73,6 +73,8 @@ func main() {
 		smChecks[i] = sysmonitor.CheckConfig{
 			Type:                     c.Type,
 			Path:                     c.Path,
+			Name:                     c.Name,
+			Target:                   c.Target,
 			WarningThresholdPercent:  c.WarningThresholdPercent,
 			CriticalThresholdPercent: c.CriticalThresholdPercent,
 		}
