@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"soulman/common"
+	"soulman/perception-svc/sysmonitor"
 )
 
 // Publisher is satisfied by *natspublish.Publisher. Declared here (not
@@ -19,24 +20,31 @@ type Publisher interface {
 }
 
 type Server struct {
-	port         string
-	watchedPaths []string
-	natsStatus   func() string
-	publisher    Publisher
-	router       chi.Router
+	port                string
+	watchedPaths        []string
+	natsStatus          func() string
+	publisher           Publisher
+	systemMonitorStatus func() []sysmonitor.CheckStatus
+	router              chi.Router
 }
 
-func New(port string, watchedPaths []string, natsStatus func() string, publisher Publisher) *Server {
-	s := &Server{port: port, watchedPaths: watchedPaths, natsStatus: natsStatus, publisher: publisher}
+func New(port string, watchedPaths []string, natsStatus func() string, publisher Publisher, systemMonitorStatus func() []sysmonitor.CheckStatus) *Server {
+	s := &Server{
+		port:                port,
+		watchedPaths:        watchedPaths,
+		natsStatus:          natsStatus,
+		publisher:           publisher,
+		systemMonitorStatus: systemMonitorStatus,
+	}
 	s.router = s.buildRouter()
 	return s
 }
 
 // NewWithPublisher builds a Server for tests that only exercise
 // publisher-dependent handlers (like perceiveRaw) and don't care about
-// port/watchedPaths/natsStatus.
+// port/watchedPaths/natsStatus/systemMonitorStatus.
 func NewWithPublisher(publisher Publisher) *Server {
-	return New("0", nil, nil, publisher)
+	return New("0", nil, nil, publisher, nil)
 }
 
 func (s *Server) Handler() http.Handler { return s.router }
@@ -50,9 +58,22 @@ func (s *Server) buildRouter() chi.Router {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Get("/health", s.health)
+	r.Get("/api/system-monitor/status", s.systemMonitorStatusHandler)
 	r.Post("/api/perceive/cli", s.perceiveCLI)
 	r.Post("/api/perceive/raw", s.perceiveRaw)
 	return r
+}
+
+func (s *Server) systemMonitorStatusHandler(w http.ResponseWriter, r *http.Request) {
+	var statuses []sysmonitor.CheckStatus
+	if s.systemMonitorStatus != nil {
+		statuses = s.systemMonitorStatus()
+	}
+	if statuses == nil {
+		statuses = []sysmonitor.CheckStatus{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(statuses)
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
