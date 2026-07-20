@@ -14,6 +14,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -65,6 +67,20 @@ const (
 	severityCritical severity = "critical"
 )
 
+// CheckStatus is a snapshot of one check's most recent poll result —
+// distinct from the internal state map's severity-only tracking, which
+// exists purely to gate publish decisions. CheckStatus is updated on every
+// poll regardless of whether severity changed, so it always reflects "what
+// did the last poll see," not "did anything change."
+type CheckStatus struct {
+	Type         string    `json:"type"`
+	Key          string    `json:"key,omitempty"` // path (disk_space) or name (service_health); absent for memory/cpu
+	Severity     string    `json:"severity"`
+	ValuePercent *float64  `json:"value_percent,omitempty"` // disk_space/memory/cpu only
+	Detail       string    `json:"detail,omitempty"`        // service_health only, set when severity is critical
+	CheckedAt    time.Time `json:"checked_at"`
+}
+
 // Watcher polls the configured checks and publishes a Stimulus on each
 // severity transition. State is in-memory only (see design spec) — a
 // restart resets every check to "ok", so a still-bad condition re-fires
@@ -78,6 +94,9 @@ type Watcher struct {
 
 	state map[string]severity
 
+	mu     sync.Mutex
+	status map[string]CheckStatus
+
 	cancel context.CancelFunc
 }
 
@@ -89,7 +108,32 @@ func newWatcher(stats statsProvider, health healthChecker, checks []CheckConfig,
 		publisher: publisher,
 		interval:  interval,
 		state:     map[string]severity{},
+		status:    map[string]CheckStatus{},
 	}
+}
+
+func (w *Watcher) recordStatus(key string, s CheckStatus) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.status[key] = s
+}
+
+// Status returns a snapshot of every check's most recent poll result,
+// sorted by key for a deterministic response. Safe to call concurrently
+// with the poll loop (e.g. from an HTTP handler's goroutine).
+func (w *Watcher) Status() []CheckStatus {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	keys := make([]string, 0, len(w.status))
+	for k := range w.status {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	result := make([]CheckStatus, 0, len(keys))
+	for _, k := range keys {
+		result = append(result, w.status[k])
+	}
+	return result
 }
 
 // Start launches the poll loop in a background goroutine and returns
@@ -126,15 +170,26 @@ func (w *Watcher) poll(ctx context.Context) {
 	}
 }
 
-func checkKey(c CheckConfig) string {
+// checkIdentifier is the check's own identifier within its Type: the disk
+// path for disk_space, the service name for service_health, empty for
+// memory/cpu (there's only ever one of each).
+func checkIdentifier(c CheckConfig) string {
 	switch c.Type {
 	case "disk_space":
-		return c.Type + ":" + c.Path
+		return c.Path
 	case "service_health":
-		return c.Type + ":" + c.Name
+		return c.Name
 	default:
+		return ""
+	}
+}
+
+func checkKey(c CheckConfig) string {
+	id := checkIdentifier(c)
+	if id == "" {
 		return c.Type
 	}
+	return c.Type + ":" + id
 }
 
 func (w *Watcher) measure(c CheckConfig) (float64, error) {
@@ -160,18 +215,31 @@ func deriveSeverity(value, warning, critical float64) severity {
 	return severityOK
 }
 
-// runCheck measures one check and hands the result to publishTransition,
+// runCheck measures one check, records its CheckStatus (every poll,
+// regardless of transition), and hands the severity to publishTransition,
 // which owns the edge-triggered state machine shared by every check type.
 // service_health bypasses measure/deriveSeverity entirely: its severity is
 // binary, derived directly from healthChecker.Check.
 func (w *Watcher) runCheck(ctx context.Context, c CheckConfig) {
+	key := checkKey(c)
+
 	if c.Type == "service_health" {
 		healthy, detail := w.health.Check(c.Target, serviceHealthTimeout)
 		sev := severityOK
 		if !healthy {
 			sev = severityCritical
 		}
-		w.publishTransition(ctx, checkKey(c), sev, func() *common.Stimulus {
+		status := CheckStatus{
+			Type:      c.Type,
+			Key:       checkIdentifier(c),
+			Severity:  string(sev),
+			CheckedAt: time.Now().UTC(),
+		}
+		if sev == severityCritical {
+			status.Detail = detail
+		}
+		w.recordStatus(key, status)
+		w.publishTransition(ctx, key, sev, func() *common.Stimulus {
 			return buildServiceHealthStimulus(c, sev, detail)
 		})
 		return
@@ -182,12 +250,19 @@ func (w *Watcher) runCheck(ctx context.Context, c CheckConfig) {
 		if errors.Is(err, errNoCPUBaseline) {
 			return
 		}
-		log.Printf("sysmonitor: check %s failed, skipping this poll: %v", checkKey(c), err)
+		log.Printf("sysmonitor: check %s failed, skipping this poll: %v", key, err)
 		return
 	}
 
 	sev := deriveSeverity(value, c.WarningThresholdPercent, c.CriticalThresholdPercent)
-	w.publishTransition(ctx, checkKey(c), sev, func() *common.Stimulus {
+	w.recordStatus(key, CheckStatus{
+		Type:         c.Type,
+		Key:          checkIdentifier(c),
+		Severity:     string(sev),
+		ValuePercent: &value,
+		CheckedAt:    time.Now().UTC(),
+	})
+	w.publishTransition(ctx, key, sev, func() *common.Stimulus {
 		return buildStimulus(c, value, sev)
 	})
 }
