@@ -25,3 +25,7 @@ There is still no correction/feedback loop for miscalibrated verdicts — descri
 ## Publisher: now JetStream-backed
 
 `natsclient.Publisher` used to publish to `soulman.thinking.request` via plain core-NATS (ephemeral, no persistence). It now ensures a durable `THINKING_REQUEST` JetStream stream exists (`CreateOrUpdateStream`, idempotent) and publishes through it — part of the pipeline-debugging-tools work that fixed a real message-loss incident (see `action-svc/NOTES.md`).
+
+## System Monitor importance: `ok` is always a recovery (added 2026-07-20)
+
+`systemMonitorImportant` (`thinking-svc/rules/system_monitor.go`) treats `severity == "ok"` as important, same as `critical` — this isn't a guess, it follows directly from `perception-svc/sysmonitor`'s edge-triggered publish design: a `Stimulus` is only ever published when severity *changes*, so a published `"ok"` can never represent "still fine" (that state is never published at all) — it always means "just recovered from warning or critical." If `sysmonitor`'s publish semantics ever changed to also publish steady-state pings, this reasoning would break and `systemMonitorImportant` would need revisiting.

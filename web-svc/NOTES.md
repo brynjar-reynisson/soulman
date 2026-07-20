@@ -27,3 +27,7 @@ A blank value does not mean "HS256 tokens simply fail verification against a mis
 ## `auth.Verifier`'s JWKS cache never refreshes or refetches on an unknown `kid`
 
 `getOrFetchPublicKey` (`web-svc/auth/verifier.go`) caches EC public keys by `kid` after fetching Supabase's JWKS endpoint, but if a token arrives with a `kid` the cache doesn't recognize, it silently falls back to the first-seen key instead of refetching the JWKS document. This was flagged as a residual gap in Task 2's code review and deliberately left unfixed there as out of scope. In practice this means: if Supabase ever rotates its signing key, tokens signed with the new key will carry a new `kid`, the cache (populated before rotation) won't have it, and verification will keep retrying the stale pre-rotation key rather than fetching the new one — so newly issued tokens would fail verification until the process is restarted (which repopulates the cache from a fresh JWKS fetch). A restart is currently the only way to pick up a rotated key; there is no TTL or unknown-`kid` refetch trigger.
+
+## `reports.Read` now combines two files, not one (added 2026-07-20)
+
+See `docs/superpowers/specs/2026-07-20-daily-report-importance-split-design.md`. `reports.PathForDate` gained an `important bool` parameter and `reports.Read`'s return value changed from one file's raw bytes to a combined `## Important` / `## Not Important` string — `web-svc/httpserver/reports_handler.go` needed no changes at all, since it only calls `reports.Read` and forwards `content` through unchanged.
