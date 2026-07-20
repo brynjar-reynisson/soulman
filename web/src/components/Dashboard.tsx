@@ -3,7 +3,6 @@ import { StatusPanel } from './StatusPanel';
 import { EpisodesPanel } from './EpisodesPanel';
 import { RawInputsPanel } from './RawInputsPanel';
 import { ReportsPanel } from './ReportsPanel';
-import { SystemMonitorPanel } from './SystemMonitorPanel';
 
 export function Dashboard({
   initialStatus,
@@ -22,7 +21,6 @@ export function Dashboard({
       </div>
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <StatusPanel initialStatus={initialStatus} />
-        <SystemMonitorPanel />
         <ReportsPanel />
         <EpisodesPanel />
         <RawInputsPanel />
