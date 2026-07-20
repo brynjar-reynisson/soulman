@@ -33,6 +33,7 @@ func handleCLINote(_ context.Context, s *common.Stimulus, _ llm.Client) (*common
 		RawContent: s.Content.RawText,
 		SourcePath: "cli/note",
 		OccurredAt: s.OccurredAt,
+		Important:  true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("rules: marshal cli note parameters: %w", err)

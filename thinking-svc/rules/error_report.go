@@ -21,6 +21,7 @@ type errorReportParams struct {
 	RawContent string     `json:"raw_content"`
 	SourcePath string     `json:"source_path"`
 	OccurredAt *time.Time `json:"occurred_at"`
+	Important  bool       `json:"important"`
 }
 
 // ErrorReportRule implements the single v1 rule from
@@ -59,6 +60,7 @@ func handleErrorReport(_ context.Context, s *common.Stimulus, _ llm.Client) (*co
 		RawContent: s.Content.RawText,
 		SourcePath: sourcePath,
 		OccurredAt: occurredAtValue(s),
+		Important:  true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("rules: marshal error report parameters: %w", err)

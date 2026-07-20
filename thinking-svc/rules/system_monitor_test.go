@@ -153,6 +153,58 @@ func TestSystemMonitorRule_Handle_BuildsActionRequest_NoPath(t *testing.T) {
 	}
 }
 
+func TestSystemMonitorRule_Handle_Important(t *testing.T) {
+	cases := []struct {
+		name     string
+		severity string
+		want     bool
+	}{
+		{"critical is important", "critical", true},
+		{"ok is important (edge-triggered publish means ok is always a recovery)", "ok", true},
+		{"warning is not important", "warning", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			specific, _ := json.Marshal(struct {
+				CheckType string `json:"check_type"`
+				Path      string `json:"path,omitempty"`
+				Severity  string `json:"severity"`
+			}{CheckType: "disk_space", Path: `C:\`, Severity: tc.severity})
+
+			occurred := time.Now()
+			s := &common.Stimulus{
+				StimulusID: "stim-sysmon-importance",
+				Channel:    "system-monitor",
+				ReceivedAt: time.Now().UTC(),
+				OccurredAt: &occurred,
+				Content: common.Content{
+					RawText:     "message",
+					ContentType: "text",
+					RawPayload:  json.RawMessage(`{}`),
+				},
+				ChannelMeta: common.ChannelMeta{ChannelSpecific: specific},
+				Hints:       common.Hints{Priority: "normal", Tags: []string{"system", "system-monitor", "disk_space"}},
+				Override:    common.Override{Params: json.RawMessage(`{}`)},
+			}
+
+			req, err := rules.SystemMonitorRule.Handle(context.Background(), s, &fakeSummarizer{})
+			if err != nil {
+				t.Fatalf("Handle: %v", err)
+			}
+
+			var params struct {
+				Important bool `json:"important"`
+			}
+			if err := json.Unmarshal(req.Parameters, &params); err != nil {
+				t.Fatalf("decode Parameters: %v", err)
+			}
+			if params.Important != tc.want {
+				t.Errorf("severity=%q: important = %v, want %v", tc.severity, params.Important, tc.want)
+			}
+		})
+	}
+}
+
 func TestMatch_FindsSystemMonitorRule(t *testing.T) {
 	s := newSystemMonitorStimulus("x", "cpu", "", time.Now())
 	r := rules.Match(s)

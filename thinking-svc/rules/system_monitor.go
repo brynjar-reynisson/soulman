@@ -32,6 +32,7 @@ func handleSystemMonitor(_ context.Context, s *common.Stimulus, _ llm.Client) (*
 		RawContent: s.Content.RawText,
 		SourcePath: systemMonitorSourcePath(s),
 		OccurredAt: s.OccurredAt,
+		Important:  systemMonitorImportant(s),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("rules: marshal system monitor parameters: %w", err)
@@ -72,4 +73,21 @@ func systemMonitorSourcePath(s *common.Stimulus) string {
 		return "system-monitor/" + meta.CheckType
 	}
 	return "system-monitor/" + meta.CheckType + "/" + id
+}
+
+// systemMonitorImportant is true for a critical severity (the system is
+// down, or a resource hit its critical threshold) and for an ok severity —
+// perception-svc's sysmonitor only ever publishes on a severity *change*
+// (edge-triggered), so a published "ok" is never a steady-state "still
+// fine" ping; it is always a just-recovered transition, symmetric with
+// critical. Only "warning" (a resource crossing its softer threshold, not
+// yet critical) stays not-important.
+func systemMonitorImportant(s *common.Stimulus) bool {
+	var meta struct {
+		Severity string `json:"severity"`
+	}
+	if len(s.ChannelMeta.ChannelSpecific) > 0 {
+		_ = json.Unmarshal(s.ChannelMeta.ChannelSpecific, &meta)
+	}
+	return meta.Severity == "critical" || meta.Severity == "ok"
 }
