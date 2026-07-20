@@ -84,7 +84,7 @@ func main() {
 	sm.Start(ctx)
 	log.Printf("sysmonitor: started (checks=%d, poll_interval=%ds)", len(smChecks), cfg.SystemMonitorPollIntervalSeconds)
 
-	srv := httpserver.New(cfg.HTTPPort, cfg.WatchPaths, pub.Status, pub)
+	srv := httpserver.New(cfg.HTTPPort, cfg.WatchPaths, pub.Status, pub, sm.Status)
 	go func() {
 		log.Printf("HTTP listening on :%s", cfg.HTTPPort)
 		if err := srv.Start(); err != nil {

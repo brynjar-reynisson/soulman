@@ -378,3 +378,95 @@ func TestPoll_ServiceHealthAndDiskCheck_TrackedIndependently(t *testing.T) {
 		t.Errorf("channel_specific = %+v, want check_type=service_health name=svc", meta)
 	}
 }
+
+func TestStatus_UpdatesEveryPoll_EvenWithoutTransition(t *testing.T) {
+	stats := &fakeStats{disk: map[string]float64{`C:\`: 50}}
+	pub := &fakePublisher{}
+	w := newWatcher(stats, nil, []CheckConfig{diskCheck(`C:\`)}, pub, time.Hour)
+
+	w.poll(context.Background())
+	first := w.Status()
+	if len(first) != 1 {
+		t.Fatalf("Status() = %d entries, want 1", len(first))
+	}
+	if first[0].Type != "disk_space" || first[0].Key != `C:\` {
+		t.Errorf("Status()[0] = %+v, want type=disk_space key=C:\\", first[0])
+	}
+	if first[0].ValuePercent == nil || *first[0].ValuePercent != 50 {
+		t.Errorf("ValuePercent = %v, want 50", first[0].ValuePercent)
+	}
+	if first[0].Severity != "ok" {
+		t.Errorf("Severity = %q, want ok", first[0].Severity)
+	}
+	if first[0].CheckedAt.IsZero() {
+		t.Error("CheckedAt must be set")
+	}
+
+	stats.mu.Lock()
+	stats.disk[`C:\`] = 60 // still ok, no transition — status must still update
+	stats.mu.Unlock()
+	w.poll(context.Background())
+
+	second := w.Status()
+	if second[0].ValuePercent == nil || *second[0].ValuePercent != 60 {
+		t.Errorf("ValuePercent after second poll = %v, want 60 (status must update every poll, not just on transition)", second[0].ValuePercent)
+	}
+}
+
+func TestStatus_ServiceHealth_ReflectsSeverityAndDetail(t *testing.T) {
+	health := &fakeHealth{
+		healthy: map[string]bool{"svc:1234": false},
+		detail:  map[string]string{"svc:1234": "connection refused"},
+	}
+	pub := &fakePublisher{}
+	w := newWatcher(&fakeStats{}, health, []CheckConfig{serviceCheck("svc", "svc:1234")}, pub, time.Hour)
+
+	w.poll(context.Background())
+
+	status := w.Status()
+	if len(status) != 1 {
+		t.Fatalf("Status() = %d entries, want 1", len(status))
+	}
+	if status[0].Type != "service_health" || status[0].Key != "svc" {
+		t.Errorf("status = %+v, want type=service_health key=svc", status[0])
+	}
+	if status[0].Severity != "critical" {
+		t.Errorf("Severity = %q, want critical", status[0].Severity)
+	}
+	if status[0].Detail != "connection refused" {
+		t.Errorf("Detail = %q, want %q", status[0].Detail, "connection refused")
+	}
+	if status[0].ValuePercent != nil {
+		t.Errorf("ValuePercent = %v, want nil for service_health", status[0].ValuePercent)
+	}
+}
+
+func TestStatus_ServiceHealth_HealthyHasNoDetail(t *testing.T) {
+	health := &fakeHealth{healthy: map[string]bool{"svc:1234": true}}
+	pub := &fakePublisher{}
+	w := newWatcher(&fakeStats{}, health, []CheckConfig{serviceCheck("svc", "svc:1234")}, pub, time.Hour)
+
+	w.poll(context.Background())
+
+	status := w.Status()
+	if status[0].Detail != "" {
+		t.Errorf("Detail = %q, want empty when healthy", status[0].Detail)
+	}
+}
+
+func TestStatus_SortedByKey(t *testing.T) {
+	stats := &fakeStats{disk: map[string]float64{`C:\`: 50, `D:\`: 50}}
+	pub := &fakePublisher{}
+	checks := []CheckConfig{diskCheck(`D:\`), diskCheck(`C:\`)} // intentionally out of order
+	w := newWatcher(stats, nil, checks, pub, time.Hour)
+
+	w.poll(context.Background())
+
+	status := w.Status()
+	if len(status) != 2 {
+		t.Fatalf("Status() = %d entries, want 2", len(status))
+	}
+	if status[0].Key >= status[1].Key {
+		t.Errorf("Status() not sorted: %q before %q", status[0].Key, status[1].Key)
+	}
+}

@@ -31,6 +31,15 @@ export interface Report {
   content: string;
 }
 
+export interface CheckStatus {
+  type: string;
+  key?: string;
+  severity: 'ok' | 'warning' | 'critical';
+  value_percent?: number;
+  detail?: string;
+  checked_at: string;
+}
+
 const WEB_SVC_URL = import.meta.env.VITE_WEB_SVC_URL as string;
 
 export class ApiError extends Error {
@@ -66,3 +75,6 @@ export const getLatestReport = (token: string | null): Promise<Report> =>
 
 export const getReportByDate = (token: string | null, date: string): Promise<Report> =>
   getJSON(`/api/reports?date=${date}`, token);
+
+export const getSystemMonitorStatus = (token: string | null): Promise<CheckStatus[]> =>
+  getJSON('/api/system-monitor', token);

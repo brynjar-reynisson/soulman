@@ -32,7 +32,7 @@ func postCLI(t *testing.T, srv *httpserver.Server, body string) *httptest.Respon
 
 func TestPerceiveCLI_DefaultMode_PublishesCLIChannel(t *testing.T) {
 	pub := &fakePublisher{}
-	srv := httpserver.New("9001", nil, nil, pub)
+	srv := httpserver.New("9001", nil, nil, pub, nil)
 
 	rec := postCLI(t, srv, `{"text":"remind me to check logs"}`)
 
@@ -72,7 +72,7 @@ func TestPerceiveCLI_DefaultMode_PublishesCLIChannel(t *testing.T) {
 
 func TestPerceiveCLI_NoteMode_PublishesCLINoteChannel(t *testing.T) {
 	pub := &fakePublisher{}
-	srv := httpserver.New("9001", nil, nil, pub)
+	srv := httpserver.New("9001", nil, nil, pub, nil)
 
 	rec := postCLI(t, srv, `{"text":"disk cleanup done","mode":"note","priority":"high"}`)
 
@@ -88,7 +88,7 @@ func TestPerceiveCLI_NoteMode_PublishesCLINoteChannel(t *testing.T) {
 }
 
 func TestPerceiveCLI_MissingText_Returns400(t *testing.T) {
-	srv := httpserver.New("9001", nil, nil, &fakePublisher{})
+	srv := httpserver.New("9001", nil, nil, &fakePublisher{}, nil)
 
 	rec := postCLI(t, srv, `{"mode":"note"}`)
 
@@ -98,7 +98,7 @@ func TestPerceiveCLI_MissingText_Returns400(t *testing.T) {
 }
 
 func TestPerceiveCLI_WhitespaceOnlyText_Returns400(t *testing.T) {
-	srv := httpserver.New("9001", nil, nil, &fakePublisher{})
+	srv := httpserver.New("9001", nil, nil, &fakePublisher{}, nil)
 
 	rec := postCLI(t, srv, `{"text":"   ","mode":"note"}`)
 
@@ -108,7 +108,7 @@ func TestPerceiveCLI_WhitespaceOnlyText_Returns400(t *testing.T) {
 }
 
 func TestPerceiveCLI_InvalidMode_Returns400(t *testing.T) {
-	srv := httpserver.New("9001", nil, nil, &fakePublisher{})
+	srv := httpserver.New("9001", nil, nil, &fakePublisher{}, nil)
 
 	rec := postCLI(t, srv, `{"text":"hi","mode":"bogus"}`)
 
@@ -118,7 +118,7 @@ func TestPerceiveCLI_InvalidMode_Returns400(t *testing.T) {
 }
 
 func TestPerceiveCLI_InvalidPriority_Returns400(t *testing.T) {
-	srv := httpserver.New("9001", nil, nil, &fakePublisher{})
+	srv := httpserver.New("9001", nil, nil, &fakePublisher{}, nil)
 
 	rec := postCLI(t, srv, `{"text":"hi","priority":"urgent"}`)
 
@@ -128,7 +128,7 @@ func TestPerceiveCLI_InvalidPriority_Returns400(t *testing.T) {
 }
 
 func TestPerceiveCLI_MalformedJSON_Returns400(t *testing.T) {
-	srv := httpserver.New("9001", nil, nil, &fakePublisher{})
+	srv := httpserver.New("9001", nil, nil, &fakePublisher{}, nil)
 
 	rec := postCLI(t, srv, `{not json`)
 
@@ -139,7 +139,7 @@ func TestPerceiveCLI_MalformedJSON_Returns400(t *testing.T) {
 
 func TestPerceiveCLI_PublishFails_Returns503(t *testing.T) {
 	pub := &fakePublisher{err: context.DeadlineExceeded}
-	srv := httpserver.New("9001", nil, nil, pub)
+	srv := httpserver.New("9001", nil, nil, pub, nil)
 
 	rec := postCLI(t, srv, `{"text":"hi"}`)
 
