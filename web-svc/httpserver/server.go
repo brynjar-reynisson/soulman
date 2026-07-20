@@ -69,6 +69,7 @@ func (s *Server) buildRouter() chi.Router {
 		r.Get("/api/status", s.apiStatus)
 		r.Get("/api/episodes", s.proxyGet(s.cfg.MemorySvcURL, "/memory/episodes"))
 		r.Get("/api/raw-inputs/recent", s.proxyGet(s.cfg.MemorySvcURL, "/raw-inputs/recent"))
+		r.Get("/api/system-monitor", s.proxyGet(s.cfg.PerceptionSvcURL, "/api/system-monitor/status"))
 		r.Get("/api/reports/latest", s.reportsLatest)
 		r.Get("/api/reports", s.reportsByDate)
 	})
