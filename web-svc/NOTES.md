@@ -14,6 +14,10 @@ Unlike `agent-suite`'s `UserResolverFilter` (DB-backed `suite_user`/`user_role` 
 
 Each of the four downstream `/health` checks in `apiStatus` has its own 5s timeout and failures are captured per-service (`"down"` in the response map) rather than failing the whole request — a single service being down (e.g. during a rebuild) shouldn't take down the dashboard's status panel along with it.
 
+## `/api/system-monitor` is a plain proxy, not a status aggregator
+
+Unlike `/api/status` (which independently probes 4 services' `/health` endpoints and reports up/down), `/api/system-monitor` (added 2026-07-20) is a thin passthrough of `perception-svc`'s `GET /api/system-monitor/status` via the existing `proxyGet` helper — same pattern as `/api/episodes`/`/api/raw-inputs/recent`. The data's freshness is entirely `perception-svc`'s: whatever its `sysmonitor.Watcher` last polled (up to 5 minutes stale), not re-checked by `web-svc` on each dashboard load.
+
 ## `SUPABASE_JWT_SECRET` is optional, not required
 
 `web-svc/config/config.go`'s `Load()` used to treat a blank `SUPABASE_JWT_SECRET` as a fatal startup error, alongside `SUPABASE_URL`. That was wrong and has been fixed: this deployment's hosted Supabase project signs auth tokens with ES256 (asymmetric, verified via its JWKS endpoint — see `web-svc/auth/verifier.go`), not the legacy HS256 shared-secret scheme, a conclusion reinforced by `agent-suite` having run against this same Supabase project for a while without ever setting `SUPABASE_JWT_SECRET`/`SUPABASE_PROD_JWT_SECRET` anywhere. `Load()` now defaults `SUPABASE_JWT_SECRET` to an empty string via `env("SUPABASE_JWT_SECRET", "")` rather than erroring.
