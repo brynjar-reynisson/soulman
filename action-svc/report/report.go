@@ -11,39 +11,51 @@ import (
 // Entry is one daily-report entry, matching the format from
 // error-report-action-design.md: a header line (timestamp, source
 // directory, one-line summary) optionally followed by verbatim raw content.
+// Important determines which of the two per-day files this entry is
+// appended to — see docs/superpowers/specs/2026-07-20-daily-report-importance-split-design.md.
 type Entry struct {
 	Summary    string
 	RawContent string
 	SourcePath string
 	OccurredAt time.Time
+	Important  bool
 }
 
-// PathForDate returns the report file path for the given date, using the
-// YYYY-MM-DD of the *occurred* date (not "today") per the error-report
-// spec. Shared by the dispatch handler (writes) and the scheduler (reads)
-// so the two can never disagree on the filename convention.
-func PathForDate(root string, date time.Time) string {
-	filename := fmt.Sprintf("daily-report-%s.txt", date.Local().Format("2006-01-02"))
+// PathForDate returns the report file path for the given date and
+// importance, using the YYYY-MM-DD of the *occurred* date (not "today")
+// per the error-report spec. The important filename is unchanged from
+// before this feature (daily-report-<date>.txt) — no migration needed.
+// Shared by the dispatch handler (writes) and the scheduler/Read (reads)
+// so they can never disagree on the filename convention.
+func PathForDate(root string, date time.Time, important bool) string {
+	suffix := ""
+	if !important {
+		suffix = "-fyi"
+	}
+	filename := fmt.Sprintf("daily-report-%s%s.txt", date.Local().Format("2006-01-02"), suffix)
 	return filepath.Join(root, "reports", filename)
 }
 
-// Append writes one entry to the report file for entry.OccurredAt's date,
-// creating $root/reports/ (and the file) if either is missing. If the file
-// already has content, the new entry is preceded by exactly one blank line.
+// Append writes one entry to the important or not-important file for
+// entry.OccurredAt's date (per entry.Important), creating $root/reports/
+// (and the file) if either is missing. If the target file already has
+// content, the new entry is preceded by exactly one blank line.
 //
 // Append is not safe for concurrent use: it performs a read-then-write
 // sequence (peeking the file's trailing newlines via separatorFor, possibly
 // truncating, then appending) with no internal locking. Safe today because
 // the sole caller (dispatch's NATS message handler) processes messages one
 // at a time in a single goroutine; a future concurrent caller must add its
-// own synchronization.
+// own synchronization. The two files (important/not-important) are
+// entirely independent — an important-entry append never touches the FYI
+// file or vice versa.
 func Append(root string, e Entry) (string, error) {
 	dir := filepath.Join(root, "reports")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("report: mkdir %s: %w", dir, err)
 	}
 
-	path := PathForDate(root, e.OccurredAt)
+	path := PathForDate(root, e.OccurredAt, e.Important)
 
 	sep, err := separatorFor(path)
 	if err != nil {
@@ -123,10 +135,23 @@ func formatEntry(e Entry) string {
 	return header + "\n" + e.RawContent
 }
 
-// Read returns the full contents of the report file for the given date, or
-// "" (with no error) if the file doesn't exist yet.
+// Read returns the combined view for the given date: important entries
+// under a "## Important" heading, not-important entries under a
+// "## Not Important" heading. A missing/empty file contributes no section
+// at all (not an empty header) — if neither file has content, returns "".
 func Read(root string, date time.Time) (string, error) {
-	path := PathForDate(root, date)
+	important, err := readFile(PathForDate(root, date, true))
+	if err != nil {
+		return "", err
+	}
+	notImportant, err := readFile(PathForDate(root, date, false))
+	if err != nil {
+		return "", err
+	}
+	return combine(important, notImportant), nil
+}
+
+func readFile(path string) (string, error) {
 	b, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return "", nil
@@ -135,4 +160,25 @@ func Read(root string, date time.Time) (string, error) {
 		return "", fmt.Errorf("report: read %s: %w", path, err)
 	}
 	return string(b), nil
+}
+
+func combine(important, notImportant string) string {
+	important = strings.TrimSpace(important)
+	notImportant = strings.TrimSpace(notImportant)
+
+	var b strings.Builder
+	if important != "" {
+		b.WriteString("## Important\n\n")
+		b.WriteString(important)
+		b.WriteString("\n")
+	}
+	if notImportant != "" {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("## Not Important\n\n")
+		b.WriteString(notImportant)
+		b.WriteString("\n")
+	}
+	return b.String()
 }
