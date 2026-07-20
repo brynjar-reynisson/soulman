@@ -27,6 +27,8 @@ Severity state (`ok`/`warning`/`critical` per check) is **in-memory only**, not 
 
 Dev and prod both poll the same physical machine's disk/memory/CPU and will each independently detect and alert on the same real condition — the same accepted duplication the Gmail channel already has for the shared inbox.
 
+`service_health` (added 2026-07-19, see `docs/superpowers/specs/2026-07-19-system-monitor-service-health-design.md`) is a fourth check type, binary (`ok`/`critical`, no `warning` tier) rather than threshold-derived — it probes an external target instead of a local syscall via a separate `healthChecker` seam (`servicehealth.go`), not `statsProvider`. `target` is polymorphic: `http://`/`https://` → GET, any 2xx is healthy; bare `host:port` → TCP dial. Both share the same 300s poll interval and edge-triggered state machine as disk/memory/CPU; the dial/GET timeout is a fixed 5s constant, not configurable per check.
+
 ## Pipeline debugging tools (`POST /api/perceive/raw`)
 
 The generic Stimulus-injection endpoint defaults `stimulus_id`, `schema_version`, `received_at`, and `occurred_at` when omitted — but for a while it did **not** default `occurred_at`, which silently broke `cli-note`/`error-report` rule handling downstream (they pass `occurred_at` straight into a `time.Parse` in `action-svc`, and an empty value fails that parse, so the request looked like it succeeded — 202 Accepted — but the report entry was never written, retried once, then silently given up). Fixed: `occurred_at` now defaults to `received_at` when nil, matching what `buildCLIStimulus` already does for `/api/perceive/cli`. If you build another injection helper on top of this endpoint, always populate `occurred_at` explicitly rather than relying on it being optional in spirit.
