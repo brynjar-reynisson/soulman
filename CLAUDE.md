@@ -57,7 +57,7 @@ Four Go services, each an independent module at the vault root, each built via i
    - Notes: `action-svc/NOTES.md` — the incident that motivated durable queues, the notification-batching design, a known deferred bug (dev/prod share one Discord bot), feign mode
 
 5. **`web-svc`** — the only Soulman service reachable from a browser: CORS-enabled, verifies Supabase-issued JWTs (reusing `agent-suite`'s existing hosted Supabase project and Google OAuth client), and authorizes a single configured owner email (`web.owner_email` in shared config) — no roles table. Serves `GET /api/status` (aggregates `/health` from the other four services), `GET /api/episodes` and `GET /api/raw-inputs/recent` (proxy `memory-svc`), `GET /api/system-monitor` (proxies `perception-svc`'s System Monitor check status), and `GET /api/reports/latest` / `GET /api/reports?date=` (reads `$SOULMAN_ROOT/reports/*.txt` directly). Does not touch NATS at all. Override/control dispatch (PAUSE/STOP/RESUME) is explicitly not implemented here — blocked on a Guard Agent design that doesn't exist yet.
-   - Specs: `2026-07-19-soulman-web-dashboard-design.md`, `2026-07-20-system-monitor-dashboard-panel-design.md`
+   - Specs: `2026-07-19-soulman-web-dashboard-design.md`, `2026-07-20-system-monitor-dashboard-panel-design.md`, `2026-07-20-dashboard-status-merge-and-raw-input-modal-design.md`
    - Notes: `web-svc/NOTES.md`
 
 ### Running dev and prod simultaneously
