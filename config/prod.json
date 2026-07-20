@@ -23,7 +23,11 @@
     "checks": [
       { "type": "disk_space", "path": "C:\\", "warning_threshold_percent": 80, "critical_threshold_percent": 95 },
       { "type": "memory", "warning_threshold_percent": 85 },
-      { "type": "cpu", "warning_threshold_percent": 90 }
+      { "type": "cpu", "warning_threshold_percent": 90 },
+      { "type": "service_health", "name": "digital-me-frontend", "target": "http://localhost:5173/" },
+      { "type": "service_health", "name": "digital-me-backend", "target": "http://127.0.0.1:8080/actuator/health" },
+      { "type": "service_health", "name": "agent-suite-frontend", "target": "https://agent.breynisson.org" },
+      { "type": "service_health", "name": "agent-suite-backend", "target": "http://localhost:8091/health" }
     ]
   },
   "web": {

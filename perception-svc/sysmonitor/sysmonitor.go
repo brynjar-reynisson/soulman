@@ -1,7 +1,9 @@
 // Package sysmonitor implements perception-svc's System Monitor pull
-// channel: polls disk space, memory, and CPU usage on a fixed interval and
-// publishes a Stimulus only when a check's severity (ok/warning/critical)
-// changes — see docs/superpowers/specs/2026-07-18-system-monitor-channel-design.md.
+// channel: polls disk space, memory, CPU usage, and external service
+// health on a fixed interval and publishes a Stimulus only when a check's
+// severity changes — see
+// docs/superpowers/specs/2026-07-18-system-monitor-channel-design.md and
+// docs/superpowers/specs/2026-07-19-system-monitor-service-health-design.md.
 package sysmonitor
 
 import (
@@ -42,10 +44,15 @@ var errNoCPUBaseline = errors.New("sysmonitor: no cpu baseline yet")
 
 // CheckConfig describes one system-monitor check, mirroring
 // sharedconfig.CheckConfig (perception-svc/main.go converts one into the
-// other so this package doesn't import sharedconfig directly).
+// other so this package doesn't import sharedconfig directly). Name and
+// Target are service_health-only; WarningThresholdPercent/
+// CriticalThresholdPercent are unused by service_health (its severity is
+// binary, derived from healthChecker.Check instead).
 type CheckConfig struct {
 	Type                     string
 	Path                     string
+	Name                     string
+	Target                   string
 	WarningThresholdPercent  float64
 	CriticalThresholdPercent float64
 }
@@ -65,6 +72,7 @@ const (
 type Watcher struct {
 	checks    []CheckConfig
 	stats     statsProvider
+	health    healthChecker
 	publisher Publisher
 	interval  time.Duration
 
@@ -73,10 +81,11 @@ type Watcher struct {
 	cancel context.CancelFunc
 }
 
-func newWatcher(stats statsProvider, checks []CheckConfig, publisher Publisher, interval time.Duration) *Watcher {
+func newWatcher(stats statsProvider, health healthChecker, checks []CheckConfig, publisher Publisher, interval time.Duration) *Watcher {
 	return &Watcher{
 		checks:    checks,
 		stats:     stats,
+		health:    health,
 		publisher: publisher,
 		interval:  interval,
 		state:     map[string]severity{},
@@ -118,10 +127,14 @@ func (w *Watcher) poll(ctx context.Context) {
 }
 
 func checkKey(c CheckConfig) string {
-	if c.Type == "disk_space" {
+	switch c.Type {
+	case "disk_space":
 		return c.Type + ":" + c.Path
+	case "service_health":
+		return c.Type + ":" + c.Name
+	default:
+		return c.Type
 	}
-	return c.Type
 }
 
 func (w *Watcher) measure(c CheckConfig) (float64, error) {
@@ -147,7 +160,23 @@ func deriveSeverity(value, warning, critical float64) severity {
 	return severityOK
 }
 
+// runCheck measures one check and hands the result to publishTransition,
+// which owns the edge-triggered state machine shared by every check type.
+// service_health bypasses measure/deriveSeverity entirely: its severity is
+// binary, derived directly from healthChecker.Check.
 func (w *Watcher) runCheck(ctx context.Context, c CheckConfig) {
+	if c.Type == "service_health" {
+		healthy, detail := w.health.Check(c.Target, serviceHealthTimeout)
+		sev := severityOK
+		if !healthy {
+			sev = severityCritical
+		}
+		w.publishTransition(ctx, checkKey(c), sev, func() *common.Stimulus {
+			return buildServiceHealthStimulus(c, sev, detail)
+		})
+		return
+	}
+
 	value, err := w.measure(c)
 	if err != nil {
 		if errors.Is(err, errNoCPUBaseline) {
@@ -158,21 +187,26 @@ func (w *Watcher) runCheck(ctx context.Context, c CheckConfig) {
 	}
 
 	sev := deriveSeverity(value, c.WarningThresholdPercent, c.CriticalThresholdPercent)
-	key := checkKey(c)
-	prev, seen := w.state[key]
+	w.publishTransition(ctx, checkKey(c), sev, func() *common.Stimulus {
+		return buildStimulus(c, value, sev)
+	})
+}
 
+// publishTransition holds the edge-triggered state machine every check
+// type shares: no stimulus on a steady state, no stimulus on a healthy/ok
+// first sighting (baseline only), publish on any other transition, and
+// leave state unadvanced (so the transition retries next poll) if the
+// publish itself fails.
+func (w *Watcher) publishTransition(ctx context.Context, key string, sev severity, build func() *common.Stimulus) {
+	prev, seen := w.state[key]
 	if seen && prev == sev {
 		return
 	}
 	if !seen && sev == severityOK {
-		// First-ever poll for this check and it's already fine: nothing to
-		// report. Still record the baseline so a future flip is detected.
 		w.state[key] = sev
 		return
 	}
-
-	stimulus := buildStimulus(c, value, sev)
-	if err := w.publisher.Publish(ctx, stimulus); err != nil {
+	if err := w.publisher.Publish(ctx, build()); err != nil {
 		log.Printf("sysmonitor: publish failed for %s (state unchanged, will retry next poll): %v", key, err)
 		return
 	}
@@ -204,6 +238,15 @@ func formatMessage(c CheckConfig, value float64, sev severity, threshold float64
 	}
 }
 
+// formatServiceHealthMessage mirrors formatMessage but for the binary
+// service_health check type, which has no percentage/threshold to report.
+func formatServiceHealthMessage(c CheckConfig, sev severity, detail string) string {
+	if sev == severityOK {
+		return fmt.Sprintf("Service recovered: %s is back up", c.Name)
+	}
+	return fmt.Sprintf("Service down: %s unreachable (%s)", c.Name, detail)
+}
+
 func priorityFor(sev severity) string {
 	switch sev {
 	case severityCritical:
@@ -215,19 +258,58 @@ func priorityFor(sev severity) string {
 	}
 }
 
-func computeMessageID(checkType, path string, sev severity, at time.Time) string {
-	sum := sha256.Sum256([]byte(checkType + path + string(sev) + at.Format(time.RFC3339)))
+// computeMessageID's second argument is the check's Path for disk_space,
+// or its Name for service_health — either way, whatever distinguishes this
+// check from others of the same Type.
+func computeMessageID(checkType, pathOrName string, sev severity, at time.Time) string {
+	sum := sha256.Sum256([]byte(checkType + pathOrName + string(sev) + at.Format(time.RFC3339)))
 	return hex.EncodeToString(sum[:])
 }
 
-func buildStimulus(c CheckConfig, value float64, sev severity) *common.Stimulus {
-	now := time.Now().UTC()
+// newSystemMonitorStimulus builds the envelope every system-monitor
+// Stimulus shares (Source, Content shell, ChannelMeta.MessageID, Hints,
+// Override) — buildStimulus and buildServiceHealthStimulus each fill in
+// ChannelMeta.ChannelSpecific afterward, since that shape differs by type.
+func newSystemMonitorStimulus(now time.Time, checkType, messageID, rawText string, sev severity) *common.Stimulus {
 	id, err := uuid.NewV7()
 	if err != nil {
 		// Extremely unlikely (crypto/rand failure); fall back to a random v4
 		// rather than crash the watcher over one reading.
 		id = uuid.New()
 	}
+
+	return &common.Stimulus{
+		StimulusID:    id.String(),
+		SchemaVersion: 1,
+		ReceivedAt:    now,
+		OccurredAt:    &now,
+		Channel:       "system-monitor",
+		Source: common.Source{
+			Identity:      "system-monitor",
+			Authenticated: true,
+			AuthMethod:    "system",
+		},
+		Content: common.Content{
+			RawText:     rawText,
+			RawPayload:  json.RawMessage(`{}`),
+			ContentType: "text",
+			Attachments: []common.Attachment{},
+		},
+		ChannelMeta: common.ChannelMeta{
+			MessageID: messageID,
+		},
+		Hints: common.Hints{
+			Priority: priorityFor(sev),
+			Tags:     []string{"system", "system-monitor", checkType},
+		},
+		Override: common.Override{
+			Params: json.RawMessage(`{}`),
+		},
+	}
+}
+
+func buildStimulus(c CheckConfig, value float64, sev severity) *common.Stimulus {
+	now := time.Now().UTC()
 
 	threshold := c.WarningThresholdPercent
 	if sev == severityCritical {
@@ -248,35 +330,36 @@ func buildStimulus(c CheckConfig, value float64, sev severity) *common.Stimulus 
 		ThresholdPercent: threshold,
 	})
 
-	return &common.Stimulus{
-		StimulusID:    id.String(),
-		SchemaVersion: 1,
-		ReceivedAt:    now,
-		OccurredAt:    &now,
-		Channel:       "system-monitor",
-		Source: common.Source{
-			Identity:      "system-monitor",
-			Authenticated: true,
-			AuthMethod:    "system",
-		},
-		Content: common.Content{
-			RawText:     formatMessage(c, value, sev, threshold),
-			RawPayload:  json.RawMessage(`{}`),
-			ContentType: "text",
-			Attachments: []common.Attachment{},
-		},
-		ChannelMeta: common.ChannelMeta{
-			MessageID:       computeMessageID(c.Type, c.Path, sev, now),
-			ChannelSpecific: specific,
-		},
-		Hints: common.Hints{
-			Priority: priorityFor(sev),
-			Tags:     []string{"system", "system-monitor", c.Type},
-		},
-		Override: common.Override{
-			Params: json.RawMessage(`{}`),
-		},
+	s := newSystemMonitorStimulus(now, c.Type, computeMessageID(c.Type, c.Path, sev, now), formatMessage(c, value, sev, threshold), sev)
+	s.ChannelMeta.ChannelSpecific = specific
+	return s
+}
+
+// buildServiceHealthStimulus mirrors buildStimulus but for the binary
+// service_health check type — see docs/superpowers/specs/2026-07-19-system-monitor-service-health-design.md.
+func buildServiceHealthStimulus(c CheckConfig, sev severity, detail string) *common.Stimulus {
+	now := time.Now().UTC()
+
+	errField := ""
+	if sev == severityCritical {
+		errField = detail
 	}
+
+	specific, _ := json.Marshal(struct {
+		CheckType string `json:"check_type"`
+		Name      string `json:"name"`
+		Severity  string `json:"severity"`
+		Error     string `json:"error,omitempty"`
+	}{
+		CheckType: c.Type,
+		Name:      c.Name,
+		Severity:  string(sev),
+		Error:     errField,
+	})
+
+	s := newSystemMonitorStimulus(now, c.Type, computeMessageID(c.Type, c.Name, sev, now), formatServiceHealthMessage(c, sev, detail), sev)
+	s.ChannelMeta.ChannelSpecific = specific
+	return s
 }
 
 func (w *Watcher) Close() error {

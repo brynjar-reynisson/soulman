@@ -65,8 +65,18 @@ func Load() (*Config, error) {
 				return nil, fmt.Errorf("shared config %s: system_monitor.checks[%d] (disk_space) has no path configured", configPath, i)
 			}
 		case "memory", "cpu":
+		case "service_health":
+			if c.Name == "" {
+				return nil, fmt.Errorf("shared config %s: system_monitor.checks[%d] (service_health) has no name configured", configPath, i)
+			}
+			if c.Target == "" {
+				return nil, fmt.Errorf("shared config %s: system_monitor.checks[%d] (service_health) has no target configured", configPath, i)
+			}
 		default:
 			return nil, fmt.Errorf("shared config %s: system_monitor.checks[%d] has unknown type %q", configPath, i, c.Type)
+		}
+		if c.Type == "service_health" {
+			continue // binary check: no percent thresholds to validate
 		}
 		if c.WarningThresholdPercent <= 0 {
 			return nil, fmt.Errorf("shared config %s: system_monitor.checks[%d] (%s) has no positive warning_threshold_percent configured", configPath, i, c.Type)
