@@ -13,6 +13,7 @@ type ReportEntryParams struct {
 	RawContent string `json:"raw_content"`
 	SourcePath string `json:"source_path"`
 	OccurredAt string `json:"occurred_at"`
+	Important  bool   `json:"important"`
 }
 
 // AppendReportEntry implements the append_daily_report_entry action. It is a
@@ -33,6 +34,7 @@ var AppendReportEntry = func(root string, params json.RawMessage) (string, error
 		RawContent: p.RawContent,
 		SourcePath: p.SourcePath,
 		OccurredAt: occurredAt.Local(),
+		Important:  p.Important,
 	}
 	path, err := report.Append(root, entry)
 	if err != nil {

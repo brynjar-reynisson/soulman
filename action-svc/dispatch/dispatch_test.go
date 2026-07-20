@@ -3,6 +3,7 @@ package dispatch_test
 import (
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -125,5 +126,43 @@ func TestAppendReportEntry_RealImplementation_WritesReportFile(t *testing.T) {
 	}
 	if path == "" {
 		t.Error("expected non-empty report path")
+	}
+}
+
+func TestAppendReportEntry_Important_WritesToImportantFile(t *testing.T) {
+	root := t.TempDir()
+	params, _ := json.Marshal(map[string]any{
+		"summary":     "critical error",
+		"raw_content": "trace",
+		"source_path": `C:\errors\file.txt`,
+		"occurred_at": "2026-07-20T14:32:00-06:00",
+		"important":   true,
+	})
+
+	path, err := dispatch.AppendReportEntry(root, params)
+	if err != nil {
+		t.Fatalf("AppendReportEntry: %v", err)
+	}
+	if filepath.Base(path) != "daily-report-2026-07-20.txt" {
+		t.Errorf("path = %q, want the important (unsuffixed) filename", filepath.Base(path))
+	}
+}
+
+func TestAppendReportEntry_NotImportant_WritesToFYIFile(t *testing.T) {
+	root := t.TempDir()
+	params, _ := json.Marshal(map[string]any{
+		"summary":     "routine note",
+		"raw_content": "",
+		"source_path": `C:\errors\file.txt`,
+		"occurred_at": "2026-07-20T14:32:00-06:00",
+		"important":   false,
+	})
+
+	path, err := dispatch.AppendReportEntry(root, params)
+	if err != nil {
+		t.Fatalf("AppendReportEntry: %v", err)
+	}
+	if filepath.Base(path) != "daily-report-2026-07-20-fyi.txt" {
+		t.Errorf("path = %q, want the not-important (-fyi) filename", filepath.Base(path))
 	}
 }
