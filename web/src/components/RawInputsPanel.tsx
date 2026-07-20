@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { getAccessToken } from '../auth';
 import { getRawInputs, type RawInput } from '../api';
+import { RawInputModal } from './RawInputModal';
 
 export function RawInputsPanel() {
   const [inputs, setInputs] = useState<RawInput[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<RawInput | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -31,13 +33,21 @@ export function RawInputsPanel() {
       {!error && inputs && inputs.length > 0 && (
         <ul className="space-y-2">
           {inputs.map((i) => (
-            <li key={i.stimulus_id} className="text-sm">
-              <span className="text-gray-400">{i.received_at}</span> [{i.channel}]{' '}
-              {i.normalized_text ?? '(no text)'}
+            <li
+              key={i.stimulus_id}
+              className="cursor-pointer text-sm"
+              role="button"
+              onClick={() => setSelected(i)}
+            >
+              <div className="text-gray-400">
+                {i.received_at} [{i.channel}]
+              </div>
+              <div className="line-clamp-2">{i.normalized_text ?? '(no text)'}</div>
             </li>
           ))}
         </ul>
       )}
+      {selected && <RawInputModal input={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }
