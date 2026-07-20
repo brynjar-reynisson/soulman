@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -171,6 +172,32 @@ func TestAppendGmailReportEntry_RealImplementation_WritesReportFile(t *testing.T
 	}
 	if path == "" {
 		t.Error("expected non-empty report path")
+	}
+}
+
+func TestAppendGmailReportEntry_Important_WritesToImportantFile(t *testing.T) {
+	root := t.TempDir()
+	params := gmailTriageParamsJSON(t, "boss@company.com", "Server down", "outage", true)
+
+	path, err := dispatch.AppendGmailReportEntry(root, params)
+	if err != nil {
+		t.Fatalf("AppendGmailReportEntry: %v", err)
+	}
+	if !strings.HasSuffix(path, "daily-report-2026-07-18.txt") {
+		t.Errorf("path = %q, want the important (unsuffixed) filename", path)
+	}
+}
+
+func TestAppendGmailReportEntry_NotImportant_WritesToFYIFile(t *testing.T) {
+	root := t.TempDir()
+	params := gmailTriageParamsJSON(t, "newsletter@example.com", "Weekly digest", "routine", false)
+
+	path, err := dispatch.AppendGmailReportEntry(root, params)
+	if err != nil {
+		t.Fatalf("AppendGmailReportEntry: %v", err)
+	}
+	if !strings.HasSuffix(path, "daily-report-2026-07-18-fyi.txt") {
+		t.Errorf("path = %q, want the not-important (-fyi) filename", path)
 	}
 }
 
