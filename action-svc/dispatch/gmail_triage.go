@@ -55,6 +55,7 @@ var AppendGmailReportEntry = func(root string, params json.RawMessage) (string, 
 		// watched_path + filename.
 		SourcePath: p.Sender + "/" + p.ThreadID,
 		OccurredAt: occurredAt.Local(),
+		Important:  p.Important,
 	}
 	path, err := report.Append(root, entry)
 	if err != nil {

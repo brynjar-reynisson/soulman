@@ -20,6 +20,7 @@ func TestAppend_CreatesReportsDirAndFile(t *testing.T) {
 		RawContent: "full stack trace",
 		SourcePath: `C:\Users\Lenovo\DigitalMe\errors\err1.txt`,
 		OccurredAt: occurred,
+		Important:  true,
 	})
 	if err != nil {
 		t.Fatalf("Append: %v", err)
@@ -54,7 +55,7 @@ func TestAppend_UsesOccurredAtDate_NotToday(t *testing.T) {
 	root := t.TempDir()
 	occurred := time.Date(2020, 1, 1, 9, 0, 0, 0, time.Local)
 
-	path, err := report.Append(root, report.Entry{Summary: "s", OccurredAt: occurred})
+	path, err := report.Append(root, report.Entry{Summary: "s", OccurredAt: occurred, Important: true})
 	if err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -67,15 +68,15 @@ func TestAppend_SecondEntry_PrecededByExactlyOneBlankLine(t *testing.T) {
 	root := t.TempDir()
 	day := time.Date(2026, 7, 17, 8, 0, 0, 0, time.Local)
 
-	if _, err := report.Append(root, report.Entry{Summary: "first", OccurredAt: day}); err != nil {
+	if _, err := report.Append(root, report.Entry{Summary: "first", OccurredAt: day, Important: true}); err != nil {
 		t.Fatalf("first append: %v", err)
 	}
 	day2 := time.Date(2026, 7, 17, 9, 0, 0, 0, time.Local)
-	if _, err := report.Append(root, report.Entry{Summary: "second", OccurredAt: day2}); err != nil {
+	if _, err := report.Append(root, report.Entry{Summary: "second", OccurredAt: day2, Important: true}); err != nil {
 		t.Fatalf("second append: %v", err)
 	}
 
-	b, err := os.ReadFile(report.PathForDate(root, day))
+	b, err := os.ReadFile(report.PathForDate(root, day, true))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -108,15 +109,16 @@ func TestAppend_SecondEntry_PrecededByExactlyOneBlankLine_WhenRawContentEndsInNe
 		RawContent: "trailing newline in raw content\n",
 		SourcePath: `C:\errors\err1.txt`,
 		OccurredAt: day,
+		Important:  true,
 	}); err != nil {
 		t.Fatalf("first append: %v", err)
 	}
 	day2 := time.Date(2026, 7, 17, 9, 0, 0, 0, time.Local)
-	if _, err := report.Append(root, report.Entry{Summary: "second", OccurredAt: day2}); err != nil {
+	if _, err := report.Append(root, report.Entry{Summary: "second", OccurredAt: day2, Important: true}); err != nil {
 		t.Fatalf("second append: %v", err)
 	}
 
-	b, err := os.ReadFile(report.PathForDate(root, day))
+	b, err := os.ReadFile(report.PathForDate(root, day, true))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -146,15 +148,16 @@ func TestAppend_SecondEntry_PrecededByExactlyOneBlankLine_WhenRawContentEndsInTh
 		RawContent: "trailing newlines in raw content\n\n\n",
 		SourcePath: `C:\errors\err1.txt`,
 		OccurredAt: day,
+		Important:  true,
 	}); err != nil {
 		t.Fatalf("first append: %v", err)
 	}
 	day2 := time.Date(2026, 7, 17, 9, 0, 0, 0, time.Local)
-	if _, err := report.Append(root, report.Entry{Summary: "second", OccurredAt: day2}); err != nil {
+	if _, err := report.Append(root, report.Entry{Summary: "second", OccurredAt: day2, Important: true}); err != nil {
 		t.Fatalf("second append: %v", err)
 	}
 
-	b, err := os.ReadFile(report.PathForDate(root, day))
+	b, err := os.ReadFile(report.PathForDate(root, day, true))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -211,8 +214,8 @@ func TestPathForDate_NormalizesToLocal(t *testing.T) {
 	zonePlus12 := instant.In(time.FixedZone("UTC+12", 12*60*60))
 	zoneMinus12 := instant.In(time.FixedZone("UTC-12", -12*60*60))
 
-	gotPlus := report.PathForDate(root, zonePlus12)
-	gotMinus := report.PathForDate(root, zoneMinus12)
+	gotPlus := report.PathForDate(root, zonePlus12, true)
+	gotMinus := report.PathForDate(root, zoneMinus12, true)
 
 	wantFilename := fmt.Sprintf("daily-report-%s.txt", instant.Local().Format("2006-01-02"))
 	want := filepath.Join(root, "reports", wantFilename)
@@ -223,8 +226,8 @@ func TestPathForDate_NormalizesToLocal(t *testing.T) {
 	if gotMinus != want {
 		t.Errorf("PathForDate(-12 zone) = %q, want %q", gotMinus, want)
 	}
-	if gotPlus != report.PathForDate(root, zonePlus12.Local()) {
-		t.Errorf("PathForDate(t) = %q, want same as PathForDate(t.Local()) = %q", gotPlus, report.PathForDate(root, zonePlus12.Local()))
+	if gotPlus != report.PathForDate(root, zonePlus12.Local(), true) {
+		t.Errorf("PathForDate(t) = %q, want same as PathForDate(t.Local()) = %q", gotPlus, report.PathForDate(root, zonePlus12.Local(), true))
 	}
 }
 
@@ -266,5 +269,98 @@ func TestAppend_CreatesSoulmanRootIfMissing(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "reports")); err != nil {
 		t.Errorf("reports dir was not created: %v", err)
+	}
+}
+
+func TestPathForDate_ImportantVsNotImportant(t *testing.T) {
+	root := t.TempDir()
+	day := time.Date(2026, 7, 20, 0, 0, 0, 0, time.Local)
+
+	important := report.PathForDate(root, day, true)
+	notImportant := report.PathForDate(root, day, false)
+
+	if filepath.Base(important) != "daily-report-2026-07-20.txt" {
+		t.Errorf("important path = %q, want daily-report-2026-07-20.txt", filepath.Base(important))
+	}
+	if filepath.Base(notImportant) != "daily-report-2026-07-20-fyi.txt" {
+		t.Errorf("not-important path = %q, want daily-report-2026-07-20-fyi.txt", filepath.Base(notImportant))
+	}
+}
+
+func TestAppend_ImportantEntry_WritesToImportantFile(t *testing.T) {
+	root := t.TempDir()
+	day := time.Date(2026, 7, 20, 8, 0, 0, 0, time.Local)
+
+	path, err := report.Append(root, report.Entry{Summary: "s", OccurredAt: day, Important: true})
+	if err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+	if path != report.PathForDate(root, day, true) {
+		t.Errorf("path = %q, want the important-file path", path)
+	}
+}
+
+func TestAppend_NotImportantEntry_WritesToFYIFile(t *testing.T) {
+	root := t.TempDir()
+	day := time.Date(2026, 7, 20, 8, 0, 0, 0, time.Local)
+
+	path, err := report.Append(root, report.Entry{Summary: "s", OccurredAt: day, Important: false})
+	if err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+	if path != report.PathForDate(root, day, false) {
+		t.Errorf("path = %q, want the not-important-file path", path)
+	}
+}
+
+func TestRead_CombinesImportantAndNotImportant_WithHeadings(t *testing.T) {
+	root := t.TempDir()
+	day := time.Date(2026, 7, 20, 8, 0, 0, 0, time.Local)
+
+	if _, err := report.Append(root, report.Entry{Summary: "important thing", OccurredAt: day, Important: true}); err != nil {
+		t.Fatalf("append important: %v", err)
+	}
+	if _, err := report.Append(root, report.Entry{Summary: "fyi thing", OccurredAt: day, Important: false}); err != nil {
+		t.Fatalf("append fyi: %v", err)
+	}
+
+	content, err := report.Read(root, day)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+
+	if !strings.Contains(content, "## Important") {
+		t.Errorf("content missing '## Important' heading:\n%s", content)
+	}
+	if !strings.Contains(content, "## Not Important") {
+		t.Errorf("content missing '## Not Important' heading:\n%s", content)
+	}
+	if !strings.Contains(content, "important thing") {
+		t.Errorf("content missing important entry:\n%s", content)
+	}
+	if !strings.Contains(content, "fyi thing") {
+		t.Errorf("content missing fyi entry:\n%s", content)
+	}
+	importantIdx := strings.Index(content, "## Important")
+	notImportantIdx := strings.Index(content, "## Not Important")
+	if importantIdx < 0 || notImportantIdx < 0 || importantIdx > notImportantIdx {
+		t.Errorf("expected '## Important' to appear before '## Not Important', got:\n%s", content)
+	}
+}
+
+func TestRead_OnlyImportantEntries_OmitsNotImportantHeading(t *testing.T) {
+	root := t.TempDir()
+	day := time.Date(2026, 7, 20, 8, 0, 0, 0, time.Local)
+
+	if _, err := report.Append(root, report.Entry{Summary: "important thing", OccurredAt: day, Important: true}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	content, err := report.Read(root, day)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if strings.Contains(content, "## Not Important") {
+		t.Errorf("content should not have '## Not Important' heading when that file is empty/missing:\n%s", content)
 	}
 }

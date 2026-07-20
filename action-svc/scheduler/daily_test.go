@@ -86,7 +86,7 @@ func TestRunOnce_MissingReport_SkipsSend(t *testing.T) {
 func TestRunOnce_WhitespaceOnlyReport_SkipsSend(t *testing.T) {
 	root := t.TempDir()
 	yesterday := time.Date(2026, 7, 16, 0, 0, 0, 0, time.Local)
-	path := report.PathForDate(root, yesterday)
+	path := report.PathForDate(root, yesterday, true)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("setup mkdir: %v", err)
 	}

@@ -68,6 +68,7 @@ func TestCLINoteRule_Handle_BuildsActionRequest(t *testing.T) {
 		RawContent string     `json:"raw_content"`
 		SourcePath string     `json:"source_path"`
 		OccurredAt *time.Time `json:"occurred_at"`
+		Important  bool       `json:"important"`
 	}
 	if err := json.Unmarshal(req.Parameters, &params); err != nil {
 		t.Fatalf("decode Parameters: %v", err)
@@ -80,6 +81,9 @@ func TestCLINoteRule_Handle_BuildsActionRequest(t *testing.T) {
 	}
 	if params.SourcePath != "cli/note" {
 		t.Errorf(`SourcePath = %q, want "cli/note"`, params.SourcePath)
+	}
+	if !params.Important {
+		t.Error("Important = false, want true for a CLI note")
 	}
 }
 

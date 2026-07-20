@@ -75,6 +75,9 @@ func TestErrorReportRule_Handle_BuildsActionRequest(t *testing.T) {
 	if params["source_path"] != wantPath {
 		t.Errorf("source_path = %v, want %v", params["source_path"], wantPath)
 	}
+	if params["important"] != true {
+		t.Errorf("important = %v, want true", params["important"])
+	}
 }
 
 func TestErrorReportRule_Handle_EmptyRawText_BinaryFallback(t *testing.T) {
