@@ -65,4 +65,21 @@ describe('StatusPanel', () => {
 
     expect(await screen.findByText('memory-svc')).toBeInTheDocument();
   });
+
+  it('suppresses the placeholder when external services data is provided without initialStatus', async () => {
+    mockGetSystemMonitorStatus.mockResolvedValue([
+      {
+        type: 'service_health',
+        key: 'external-api',
+        severity: 'critical',
+        detail: 'timeout',
+        checked_at: '2026-07-20T00:00:00Z',
+      },
+    ]);
+    const { StatusPanel } = await import('./StatusPanel');
+    render(<StatusPanel initialStatus={null} />);
+
+    expect(await screen.findByText('external-api')).toBeInTheDocument();
+    expect(screen.queryByText(/no status data/i)).not.toBeInTheDocument();
+  });
 });
