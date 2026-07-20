@@ -50,20 +50,26 @@ func handleSystemMonitor(_ context.Context, s *common.Stimulus, _ llm.Client) (*
 	return req, nil
 }
 
-// systemMonitorSourcePath builds "system-monitor/<check_type>" or
-// "system-monitor/<check_type>/<path>" from channel_metadata.channel_specific
-// — the only keys perception-svc's sysmonitor package guarantees. Parallels
-// error_report.go's watchedPath() extraction helper.
+// systemMonitorSourcePath builds "system-monitor/<check_type>",
+// "system-monitor/<check_type>/<path>", or "system-monitor/<check_type>/<name>"
+// from channel_metadata.channel_specific — path is disk_space's identifier,
+// name is service_health's. Parallels error_report.go's watchedPath()
+// extraction helper.
 func systemMonitorSourcePath(s *common.Stimulus) string {
 	var meta struct {
 		CheckType string `json:"check_type"`
 		Path      string `json:"path"`
+		Name      string `json:"name"`
 	}
 	if len(s.ChannelMeta.ChannelSpecific) > 0 {
 		_ = json.Unmarshal(s.ChannelMeta.ChannelSpecific, &meta)
 	}
-	if meta.Path == "" {
+	id := meta.Path
+	if id == "" {
+		id = meta.Name
+	}
+	if id == "" {
 		return "system-monitor/" + meta.CheckType
 	}
-	return "system-monitor/" + meta.CheckType + "/" + meta.Path
+	return "system-monitor/" + meta.CheckType + "/" + id
 }

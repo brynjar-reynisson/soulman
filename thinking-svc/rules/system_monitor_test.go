@@ -34,6 +34,51 @@ func newSystemMonitorStimulus(rawText, checkType, path string, occurredAt time.T
 	}
 }
 
+func newServiceHealthStimulus(rawText, name string, occurredAt time.Time) *common.Stimulus {
+	specific, _ := json.Marshal(struct {
+		CheckType string `json:"check_type"`
+		Name      string `json:"name"`
+	}{CheckType: "service_health", Name: name})
+
+	return &common.Stimulus{
+		StimulusID: "stim-sysmon-002",
+		Channel:    "system-monitor",
+		ReceivedAt: time.Now().UTC(),
+		OccurredAt: &occurredAt,
+		Content: common.Content{
+			RawText:     rawText,
+			ContentType: "text",
+			RawPayload:  json.RawMessage(`{}`),
+		},
+		ChannelMeta: common.ChannelMeta{
+			ChannelSpecific: specific,
+		},
+		Hints:    common.Hints{Priority: "critical", Tags: []string{"system", "system-monitor", "service_health"}},
+		Override: common.Override{Params: json.RawMessage(`{}`)},
+	}
+}
+
+func TestSystemMonitorRule_Handle_BuildsActionRequest_ServiceHealthName(t *testing.T) {
+	occurred := time.Date(2026, 7, 19, 10, 5, 0, 0, time.UTC)
+	rawText := "Service down: agent-suite-backend unreachable (connection refused)"
+	s := newServiceHealthStimulus(rawText, "agent-suite-backend", occurred)
+
+	req, err := rules.SystemMonitorRule.Handle(context.Background(), s, &fakeSummarizer{})
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	var params struct {
+		SourcePath string `json:"source_path"`
+	}
+	if err := json.Unmarshal(req.Parameters, &params); err != nil {
+		t.Fatalf("decode Parameters: %v", err)
+	}
+	if params.SourcePath != "system-monitor/service_health/agent-suite-backend" {
+		t.Errorf("SourcePath = %q, want %q", params.SourcePath, "system-monitor/service_health/agent-suite-backend")
+	}
+}
+
 func TestSystemMonitorRule_Match_SystemMonitorChannel(t *testing.T) {
 	s := newSystemMonitorStimulus(`Disk space C:\ critical: 97% used (threshold 95%)`, "disk_space", `C:\`, time.Now())
 	if !rules.SystemMonitorRule.Match(s) {
