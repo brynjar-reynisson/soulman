@@ -43,8 +43,9 @@ func TestAPIReportsLatest_ReturnsTodaysReport(t *testing.T) {
 	}
 	var body map[string]string
 	json.NewDecoder(rec.Body).Decode(&body)
-	if body["content"] != "today's report" {
-		t.Errorf("content = %q", body["content"])
+	want := "## Important\n\ntoday's report\n"
+	if body["content"] != want {
+		t.Errorf("content = %q, want %q", body["content"], want)
 	}
 }
 
@@ -66,8 +67,9 @@ func TestAPIReportsLatest_FallsBackToMostRecentWithinAWeek(t *testing.T) {
 	}
 	var body map[string]string
 	json.NewDecoder(rec.Body).Decode(&body)
-	if body["content"] != "three days ago" {
-		t.Errorf("content = %q", body["content"])
+	want := "## Important\n\nthree days ago\n"
+	if body["content"] != want {
+		t.Errorf("content = %q, want %q", body["content"], want)
 	}
 }
 
@@ -107,8 +109,9 @@ func TestAPIReportsByDate_ExistingDate_ReturnsContent(t *testing.T) {
 	}
 	var body map[string]string
 	json.NewDecoder(rec.Body).Decode(&body)
-	if body["content"] != "june first report" {
-		t.Errorf("content = %q", body["content"])
+	wantContent := "## Important\n\njune first report\n"
+	if body["content"] != wantContent {
+		t.Errorf("content = %q, want %q", body["content"], wantContent)
 	}
 	if body["date"] != "2026-06-01" {
 		t.Errorf("date = %q", body["date"])
