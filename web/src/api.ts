@@ -40,8 +40,6 @@ export interface CheckStatus {
   checked_at: string;
 }
 
-const WEB_SVC_URL = import.meta.env.VITE_WEB_SVC_URL as string;
-
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -52,7 +50,7 @@ export class ApiError extends Error {
 }
 
 async function getJSON<T>(path: string, token: string | null): Promise<T> {
-  const response = await fetch(`${WEB_SVC_URL}${path}`, {
+  const response = await fetch(path, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!response.ok) {
