@@ -32,7 +32,7 @@
   },
   "web": {
     "owner_email": "breynisson@gmail.com",
-    "cors_allowed_origin": "http://localhost:5191",
+    "cors_allowed_origin": "https://soulman.breynisson.org",
     "perception_svc_url": "http://localhost:9001",
     "memory_svc_url": "http://localhost:9002",
     "thinking_svc_url": "http://localhost:9003",
