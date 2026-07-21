@@ -11,6 +11,7 @@ export default defineConfig({
   preview: {
     port: 5191,
     host: '0.0.0.0',
+    allowedHosts: ['soulman.breynisson.org'],
   },
   test: {
     environment: 'jsdom',

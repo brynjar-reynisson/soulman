@@ -31,3 +31,10 @@ A blank value does not mean "HS256 tokens simply fail verification against a mis
 ## `reports.Read` now combines two files, not one (added 2026-07-20)
 
 See `docs/superpowers/specs/2026-07-20-daily-report-importance-split-design.md`. `reports.PathForDate` gained an `important bool` parameter and `reports.Read`'s return value changed from one file's raw bytes to a combined `## Important` / `## Not Important` string — `web-svc/httpserver/reports_handler.go` needed no changes at all, since it only calls `reports.Read` and forwards `content` through unchanged.
+
+## Dashboard is tunneled to `soulman.breynisson.org` (prod only, added 2026-07-21)
+
+`cloudflared` maps `https://soulman.breynisson.org` to prod's Vite preview server on `localhost:5191`. Two things had to change for this to work, both prod-only (dev is never tunneled):
+
+1. `web/vite.config.ts`'s `preview.allowedHosts` must list `soulman.breynisson.org` — Vite's preview server rejects requests whose `Host` header isn't localhost or in this allowlist (`Blocked request. This host is not allowed.`). This file lives in the vault and is mirrored by `run-web.ps1`'s robocopy into both `soulman-dev\web\` and `soulman-prod\web\`, so the allowlist applies to both environments' preview servers even though only prod is actually tunneled.
+2. `soulman-prod\web\.env`'s `VITE_AUTH_REDIRECT_URL` must be `https://soulman.breynisson.org` (was `http://localhost:5191`), and that same URL must be added to the Supabase project's Auth > URL Configuration > Redirect URLs allowlist — otherwise Google OAuth completes but Supabase refuses to redirect back to the tunneled origin. `soulman-prod\web\.env` is excluded from the robocopy mirror (see `run-web.ps1`'s `/XF .env*`), so it's edited directly in `soulman-prod\` rather than in the vault. Since `VITE_*` vars are inlined at build time, a rebuild (`npm run build`) of prod's `web` is required after changing it — restarting the service via `run-web.ps1` (or the next `start-everything.ps1` login run) picks it up.
