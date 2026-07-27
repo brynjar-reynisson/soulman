@@ -169,8 +169,20 @@ func (w *Watcher) processFile(ctx context.Context, path string) {
 	}
 	size := info.Size()
 
+	_, hadEntry := w.checkpoint.offsetFor(filename)
 	start := w.checkpoint.resolveStart(filename, size)
 	if start >= size {
+		// Nothing new relative to the checkpointed offset. If this is the
+		// first time this file has been seen, that offset (the EOF baseline
+		// resolveStart just computed) must still be persisted now — otherwise
+		// the next call finds no checkpoint entry either, re-resolves "start"
+		// against whatever the file's size has grown to by then, and silently
+		// skips everything written in between.
+		if !hadEntry {
+			if err := w.checkpoint.mark(filename, start); err != nil {
+				slog.Warn("logmonitor: checkpoint write failed", "path", path, "error", err)
+			}
+		}
 		return // nothing new to read
 	}
 
