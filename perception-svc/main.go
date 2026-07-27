@@ -11,6 +11,7 @@ import (
 	"soulman/perception-svc/config"
 	"soulman/perception-svc/gmailwatcher"
 	"soulman/perception-svc/httpserver"
+	"soulman/perception-svc/logmonitor"
 	"soulman/perception-svc/natspublish"
 	"soulman/perception-svc/sysmonitor"
 	"soulman/perception-svc/watcher"
@@ -86,6 +87,15 @@ func main() {
 	defer sm.Close()
 	sm.Start(ctx)
 	slog.Info("sysmonitor: started", "checks", len(smChecks), "poll_interval_s", cfg.SystemMonitorPollIntervalSeconds)
+
+	lm, err := logmonitor.New(cfg.LogDir, pub, cfg.LogMonitorCheckpointPath, time.Duration(cfg.LogMonitorReconcileIntervalSeconds)*time.Second)
+	if err != nil {
+		slog.Error("logmonitor init failed", "error", err)
+		os.Exit(1)
+	}
+	defer lm.Close()
+	lm.Start(ctx)
+	slog.Info("logmonitor: started", "log_dir", cfg.LogDir, "reconcile_interval_s", cfg.LogMonitorReconcileIntervalSeconds)
 
 	srv := httpserver.New(cfg.HTTPPort, cfg.WatchPaths, pub.Status, pub, sm.Status)
 	go func() {
