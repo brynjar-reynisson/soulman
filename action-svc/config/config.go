@@ -19,6 +19,9 @@ type Config struct {
 	MemoryWriteSubject     string
 	ActionSvcConsumerName  string
 	FeignMode              bool
+	DNDEnabled             bool
+	DNDStart               string
+	DNDEnd                 string
 }
 
 func Load() (*Config, error) {
@@ -53,6 +56,9 @@ func Load() (*Config, error) {
 		MemoryWriteSubject:     shared.MemoryWriteSubject,
 		ActionSvcConsumerName:  shared.ConsumerNames.ActionSvc,
 		FeignMode:              shared.FeignMode,
+		DNDEnabled:             shared.DoNotDisturb.Enabled,
+		DNDStart:               shared.DoNotDisturb.Start,
+		DNDEnd:                 shared.DoNotDisturb.End,
 	}, nil
 }
 
