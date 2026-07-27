@@ -671,6 +671,15 @@ func (rc *Reconnector) tick(ctx context.Context) {
 	if db == nil {
 		newDB, err := rc.newDB(ctx, rc.connStr, rc.schema)
 		if err != nil {
+			// Deliberately not logged: this fires every interval for the
+			// entire duration of an outage, and undifferentiated retry
+			// noise from a real Postgres outage is exactly what produced
+			// the 2.75GB log file documented in this service's NOTES.md
+			// before leveled logging existed. The registry.Record call
+			// still updates Detail with the latest error, and the
+			// transition into "down" was already logged (either at
+			// startup or by the Ping-failure branch below) — this branch
+			// is "still down," not a new event.
 			rc.registry.Record("postgres", err)
 			return
 		}
