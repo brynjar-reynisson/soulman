@@ -2,7 +2,7 @@ package natsclient
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -22,10 +22,10 @@ func Connect(url string) (*nats.Conn, error) {
 		nats.MaxReconnects(-1),
 		nats.ReconnectWait(2*time.Second),
 		nats.DisconnectErrHandler(func(_ *nats.Conn, err error) {
-			log.Printf("natsclient: disconnected: %v", err)
+			slog.Warn("natsclient: disconnected", "error", err)
 		}),
 		nats.ReconnectHandler(func(c *nats.Conn) {
-			log.Printf("natsclient: reconnected to %s", c.ConnectedUrl())
+			slog.Info("natsclient: reconnected", "url", c.ConnectedUrl())
 		}),
 	)
 	if err != nil {

@@ -35,6 +35,10 @@ Dev and prod both poll the same physical machine's disk/memory/CPU and will each
 
 The generic Stimulus-injection endpoint defaults `stimulus_id`, `schema_version`, `received_at`, and `occurred_at` when omitted — but for a while it did **not** default `occurred_at`, which silently broke `cli-note`/`error-report` rule handling downstream (they pass `occurred_at` straight into a `time.Parse` in `action-svc`, and an empty value fails that parse, so the request looked like it succeeded — 202 Accepted — but the report entry was never written, retried once, then silently given up). Fixed: `occurred_at` now defaults to `received_at` when nil, matching what `buildCLIStimulus` already does for `/api/perceive/cli`. If you build another injection helper on top of this endpoint, always populate `occurred_at` explicitly rather than relying on it being optional in spirit.
 
+## Leveled logging (log/slog, added 2026-07-27)
+
+All `log.Printf`/`log.Fatalf` call sites across `main.go`, `watcher`, `gmailwatcher`, and `sysmonitor` replaced with stdlib `log/slog` (`slog.Error`/`slog.Warn`/`slog.Info`) — no new dependency. Genuine failures (fsnotify errors, publish/NATS failures, Gmail API list/get/label-resolution failures) are now `slog.Error`; self-healing/expected-fallback conditions (missing watch path retried by reconciliation, a full event queue falling back to reconciliation, a checkpoint that starts empty, Gmail disabled because credentials aren't configured) are `slog.Warn`; routine lifecycle messages (started, listening, skipping a temp file) are `slog.Info`. Startup `log.Fatalf` calls became `slog.Error(...)` followed by an explicit `os.Exit(1)`.
+
 ## Known deferred issue
 
 Dev and prod share one Discord bot/channel/token for the "Soulman Reports" notifications — a real bug (every Gmail-triage Discord notification is sent twice, once per environment), deliberately not fixed yet. See `action-svc/NOTES.md`.

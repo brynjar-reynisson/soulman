@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -19,7 +19,8 @@ import (
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		slog.Error("config load failed", "error", err)
+		os.Exit(1)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -31,13 +32,15 @@ func main() {
 	// keeps trying in the background while the watcher and HTTP server start.
 	pub, err := natspublish.New(cfg.NATSURL, cfg.StimulusSubject)
 	if err != nil {
-		log.Fatalf("natspublish: %v", err)
+		slog.Error("natspublish init failed", "error", err)
+		os.Exit(1)
 	}
 	defer pub.Close()
 
 	w, err := watcher.New(cfg.WatchPaths, cp, pub, time.Duration(cfg.ReconcileInterval)*time.Second)
 	if err != nil {
-		log.Fatalf("watcher: %v", err)
+		slog.Error("watcher init failed", "error", err)
+		os.Exit(1)
 	}
 	defer w.Close()
 
@@ -48,7 +51,7 @@ func main() {
 	// than failing startup — folder-watcher stays fully functional either
 	// way, per Perception module.md's adapter-isolation principle.
 	if cfg.GmailClientID == "" || cfg.GmailClientSecret == "" || cfg.GmailRefreshToken == "" {
-		log.Printf("gmailwatcher: GMAIL_CLIENT_ID/SECRET/REFRESH_TOKEN not fully set, Gmail channel disabled")
+		slog.Warn("gmailwatcher: GMAIL_CLIENT_ID/SECRET/REFRESH_TOKEN not fully set, Gmail channel disabled")
 	} else {
 		gw, err := gmailwatcher.New(ctx, gmailwatcher.Config{
 			ClientID:     cfg.GmailClientID,
@@ -59,12 +62,12 @@ func main() {
 			PollInterval: time.Duration(cfg.GmailPollIntervalSeconds) * time.Second,
 		}, pub)
 		if err != nil {
-			log.Printf("gmailwatcher: setup failed, Gmail channel disabled: %v", err)
+			slog.Warn("gmailwatcher: setup failed, Gmail channel disabled", "error", err)
 		} else {
 			defer gw.Close()
 			gw.Start(ctx)
-			log.Printf("gmailwatcher: started (query=%q, seen_label=%q, poll_interval=%ds)",
-				cfg.GmailQuery, cfg.GmailSeenLabel, cfg.GmailPollIntervalSeconds)
+			slog.Info("gmailwatcher: started",
+				"query", cfg.GmailQuery, "seen_label", cfg.GmailSeenLabel, "poll_interval_s", cfg.GmailPollIntervalSeconds)
 		}
 	}
 
@@ -82,22 +85,22 @@ func main() {
 	sm := sysmonitor.New(smChecks, pub, time.Duration(cfg.SystemMonitorPollIntervalSeconds)*time.Second)
 	defer sm.Close()
 	sm.Start(ctx)
-	log.Printf("sysmonitor: started (checks=%d, poll_interval=%ds)", len(smChecks), cfg.SystemMonitorPollIntervalSeconds)
+	slog.Info("sysmonitor: started", "checks", len(smChecks), "poll_interval_s", cfg.SystemMonitorPollIntervalSeconds)
 
 	srv := httpserver.New(cfg.HTTPPort, cfg.WatchPaths, pub.Status, pub, sm.Status)
 	go func() {
-		log.Printf("HTTP listening on :%s", cfg.HTTPPort)
+		slog.Info("http listening", "port", cfg.HTTPPort)
 		if err := srv.Start(); err != nil {
-			log.Printf("http: %v", err)
+			slog.Error("http server failed", "error", err)
 		}
 	}()
 
-	log.Printf("perception-svc started (NATS=%s, HTTP=:%s, watching=%v, checkpoint=%s)",
-		cfg.NATSURL, cfg.HTTPPort, cfg.WatchPaths, cfg.CheckpointPath)
+	slog.Info("perception-svc started",
+		"nats_url", cfg.NATSURL, "http_port", cfg.HTTPPort, "watching", cfg.WatchPaths, "checkpoint", cfg.CheckpointPath)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Printf("perception-svc shutting down")
+	slog.Info("perception-svc shutting down")
 }

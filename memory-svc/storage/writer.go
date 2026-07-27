@@ -3,7 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"soulman/common"
 )
@@ -26,18 +26,18 @@ func (w *Writer) Write(ctx context.Context, s *common.Stimulus) error {
 	}
 
 	if w.db == nil {
-		log.Printf("writer: DB unavailable, %s written to file only", s.StimulusID)
+		slog.Warn("writer: DB unavailable, written to file only", "stimulus_id", s.StimulusID)
 		return nil
 	}
 
 	if err := w.db.InsertRawInput(ctx, s); err != nil {
-		log.Printf("writer: DB insert failed for %s (will replay on restart): %v", s.StimulusID, err)
+		slog.Error("writer: DB insert failed, will replay on restart", "stimulus_id", s.StimulusID, "error", err)
 		return nil
 	}
 
 	if err := w.fl.AppendSynced(s.StimulusID); err != nil {
-		log.Printf("writer: synced marker failed for %s: %v", s.StimulusID, err)
 		// Non-fatal: ON CONFLICT DO NOTHING handles the duplicate on next replay
+		slog.Warn("writer: synced marker write failed", "stimulus_id", s.StimulusID, "error", err)
 	}
 
 	return nil
@@ -59,15 +59,15 @@ func (w *Writer) ReplayPending(ctx context.Context) error {
 		return nil
 	}
 
-	log.Printf("writer: replaying %d pending file entries to DB", len(pending))
+	slog.Info("writer: replaying pending file entries to DB", "count", len(pending))
 
 	for _, s := range pending {
 		if err := w.db.InsertRawInput(ctx, s); err != nil {
-			log.Printf("writer: replay failed for %s: %v", s.StimulusID, err)
+			slog.Error("writer: replay insert failed", "stimulus_id", s.StimulusID, "error", err)
 			continue
 		}
 		if err := w.fl.AppendSynced(s.StimulusID); err != nil {
-			log.Printf("writer: replay synced marker failed for %s: %v", s.StimulusID, err)
+			slog.Warn("writer: replay synced marker write failed", "stimulus_id", s.StimulusID, "error", err)
 		}
 	}
 

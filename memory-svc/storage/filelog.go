@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -143,7 +143,7 @@ func (fl *FileLog) rotateIfNeeded() error {
 		return nil
 	}
 	if err := fl.f.Close(); err != nil {
-		log.Printf("filelog: close before rotate: %v", err)
+		slog.Warn("filelog: close before rotate failed", "error", err)
 	}
 	if err := os.Rename(fl.path, fl.path+".1"); err != nil {
 		return fmt.Errorf("filelog: rotate rename: %w", err)

@@ -3,7 +3,7 @@ package natsclient
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -77,7 +77,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 	}
 
 	c.cc = cc
-	log.Printf("nats: consuming THINKING_REQUEST stream as %q (subject %q)", c.consumerName, c.subject)
+	slog.Info("nats: consuming THINKING_REQUEST stream", "consumer_name", c.consumerName, "subject", c.subject)
 	return nil
 }
 

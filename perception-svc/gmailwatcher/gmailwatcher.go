@@ -2,7 +2,7 @@ package gmailwatcher
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"soulman/common"
@@ -102,7 +102,7 @@ func (w *Watcher) poll(ctx context.Context) {
 	if w.seenLabelID == "" {
 		labelID, err := w.client.EnsureLabel(ctx, w.seenLabel)
 		if err != nil {
-			log.Printf("gmailwatcher: seen label %q still unresolved, skipping poll: %v", w.seenLabel, err)
+			slog.Error("gmailwatcher: seen label still unresolved, skipping poll", "label", w.seenLabel, "error", err)
 			return
 		}
 		w.seenLabelID = labelID
@@ -110,7 +110,7 @@ func (w *Watcher) poll(ctx context.Context) {
 
 	ids, err := w.client.ListMatching(ctx, w.query)
 	if err != nil {
-		log.Printf("gmailwatcher: list matching messages failed, will retry next poll: %v", err)
+		slog.Error("gmailwatcher: list matching messages failed, will retry next poll", "error", err)
 		return
 	}
 
@@ -122,23 +122,23 @@ func (w *Watcher) poll(ctx context.Context) {
 func (w *Watcher) handleMessage(ctx context.Context, id string) {
 	msg, err := w.client.GetMessage(ctx, id)
 	if err != nil {
-		log.Printf("gmailwatcher: get message %s failed, will retry next poll: %v", id, err)
+		slog.Error("gmailwatcher: get message failed, will retry next poll", "message_id", id, "error", err)
 		return
 	}
 
 	stimulus, err := buildStimulus(msg)
 	if err != nil {
-		log.Printf("gmailwatcher: build stimulus for message %s failed, skipping: %v", id, err)
+		slog.Error("gmailwatcher: build stimulus failed, skipping message", "message_id", id, "error", err)
 		return
 	}
 
 	if err := w.publisher.Publish(ctx, stimulus); err != nil {
-		log.Printf("gmailwatcher: publish failed for message %s (seen-label left unset, will retry): %v", id, err)
+		slog.Error("gmailwatcher: publish failed, seen-label left unset, will retry", "message_id", id, "error", err)
 		return
 	}
 
 	if err := w.client.AddLabel(ctx, id, w.seenLabelID); err != nil {
-		log.Printf("gmailwatcher: label message %s as seen failed (will be re-published next poll): %v", id, err)
+		slog.Warn("gmailwatcher: label message as seen failed, will be re-published next poll", "message_id", id, "error", err)
 	}
 }
 

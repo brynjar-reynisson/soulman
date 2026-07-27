@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -21,7 +21,8 @@ import (
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		slog.Error("config load failed", "error", err)
+		os.Exit(1)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -42,7 +43,8 @@ func main() {
 	case "discord":
 		notifier = notify.NewDiscordNotifier(cfg.DiscordBotToken, cfg.DiscordChannelID)
 	default:
-		log.Fatalf("unsupported REPORT_NOTIFIER %q", cfg.ReportNotifier)
+		slog.Error("unsupported REPORT_NOTIFIER", "report_notifier", cfg.ReportNotifier)
+		os.Exit(1)
 	}
 	notifier = feign.WrapNotifier(gate, notifier)
 
@@ -58,14 +60,14 @@ func main() {
 	var publisher *natsclient.Publisher
 	nc, natsErr := natsclient.Connect(cfg.NATSURL)
 	if natsErr != nil {
-		log.Printf("WARNING: nats unavailable (%v) — dispatch degraded until reconnect", natsErr)
+		slog.Warn("nats unavailable — dispatch degraded until reconnect", "error", natsErr)
 	} else {
 		defer nc.Close()
 
 		var pubErr error
 		publisher, pubErr = natsclient.NewPublisher(ctx, nc, cfg.MemoryWriteSubject)
 		if pubErr != nil {
-			log.Printf("WARNING: nats publisher setup failed (%v) — outcome records degraded", pubErr)
+			slog.Warn("nats publisher setup failed — outcome records degraded", "error", pubErr)
 		}
 
 		// dispatchPublisher stays a true nil interface (not a typed-nil
@@ -83,9 +85,9 @@ func main() {
 		disp := dispatch.New(cfg.SoulmanRoot, dispatchPublisher, batcher, gate)
 		consumer, consErr := natsclient.NewConsumer(nc, cfg.ActionSvcConsumerName, cfg.ThinkingRequestSubject, disp.Handle)
 		if consErr != nil {
-			log.Printf("WARNING: nats consumer setup failed: %v", consErr)
+			slog.Warn("nats consumer setup failed", "error", consErr)
 		} else if startErr := consumer.Start(ctx); startErr != nil {
-			log.Printf("WARNING: nats consumer start failed: %v", startErr)
+			slog.Warn("nats consumer start failed", "error", startErr)
 		} else {
 			defer consumer.Close()
 		}
@@ -105,18 +107,19 @@ func main() {
 	// HTTP server (non-blocking)
 	srv := httpserver.New(cfg.HTTPPort)
 	go func() {
-		log.Printf("HTTP listening on :%s", cfg.HTTPPort)
+		slog.Info("http listening", "port", cfg.HTTPPort)
 		if err := srv.Start(); err != nil {
-			log.Printf("http: %v", err)
+			slog.Error("http server failed", "error", err)
 		}
 	}()
 
-	log.Printf("action-svc started (NATS=%s connected=%v, HTTP=:%s, root=%s, notifier=%s, feign_mode=%v)",
-		cfg.NATSURL, natsErr == nil, cfg.HTTPPort, cfg.SoulmanRoot, cfg.ReportNotifier, cfg.FeignMode)
+	slog.Info("action-svc started",
+		"nats_url", cfg.NATSURL, "nats_connected", natsErr == nil, "http_port", cfg.HTTPPort,
+		"root", cfg.SoulmanRoot, "notifier", cfg.ReportNotifier, "feign_mode", cfg.FeignMode)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Printf("action-svc shutting down")
+	slog.Info("action-svc shutting down")
 }
