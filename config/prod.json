@@ -6,7 +6,7 @@
   "stimulus_subject": "soulman.stimulus.raw",
   "thinking_request_subject": "soulman.thinking.request",
   "memory_write_subject": "soulman.memory.write",
-  "feign_mode": true,
+  "feign_mode": false,
   "consumer_names": {
     "memory_svc": "memory-svc",
     "memory_svc_episodes": "memory-svc-episodes",
