@@ -17,19 +17,30 @@ const (
 	DefaultMaxWait = 2 * time.Minute
 )
 
-// Item is one important-email notification queued for the next flush.
+// Item is one important notification queued for the next flush — either a
+// Gmail triage verdict or a generic append_daily_report_entry entry judged
+// important (system-monitor, log-error, folder-watcher, or any future
+// mechanical rule that sets Important: true). Kind discriminates which
+// fields formatBatch reads: "gmail" uses Sender/Subject/ThreadID/Reason/
+// BodyExcerpt (unchanged from before this generalization, added
+// 2026-07-27 per docs/superpowers/specs/2026-07-27-log-error-perception-design.md);
+// "report" uses Summary/SourcePath/BodyExcerpt, mirroring report.Entry's
+// own field names.
 type Item struct {
-	Sender      string
-	Subject     string
-	Reason      string
-	BodyExcerpt string
-	ThreadID    string
+	Kind        string // "gmail" | "report"
+	Sender      string // gmail only
+	Subject     string // gmail only
+	ThreadID    string // gmail only
+	Summary     string // report only — mirrors report.Entry.Summary
+	SourcePath  string // report only — mirrors report.Entry.SourcePath
+	Reason      string // shared: gmail's triage reason, or empty for report
+	BodyExcerpt string // shared: gmail body excerpt, or report's raw_content
 }
 
-// Batcher collects important-email Items and flushes them as a single
-// Discord message once either the grace period (no new item has arrived
-// recently) or the max-wait cap (measured from the first item in the
-// pending batch) elapses — whichever comes first. See
+// Batcher collects important Items and flushes them as a single Discord
+// message once either the grace period (no new item has arrived recently)
+// or the max-wait cap (measured from the first item in the pending batch)
+// elapses — whichever comes first. See
 // docs/superpowers/specs/2026-07-18-gmail-triage-action-design.md's
 // "Notification batching" section for the rationale behind the two
 // timers. The queue is in-memory only: a process restart with a batch
@@ -93,13 +104,25 @@ func (b *Batcher) Flush() {
 	_ = b.notifier.Send(formatBatch(items))
 }
 
+// formatBatch branches per item on Kind: "report" items render as a plain
+// "[<source_path>] <summary>\n<body_excerpt>" block; everything else
+// (including "gmail" and, for backward compatibility, an unset Kind)
+// preserves the original Gmail-shaped block exactly. The count header was
+// "N important email(s):" before this generalization — renamed to "N
+// important item(s):" since a batch can now legitimately contain zero
+// emails (an all-report-items flush).
 func formatBatch(items []Item) string {
 	blocks := make([]string, 0, len(items)+1)
-	blocks = append(blocks, fmt.Sprintf("%d important email(s):", len(items)))
+	blocks = append(blocks, fmt.Sprintf("%d important item(s):", len(items)))
 	for _, it := range items {
-		blocks = append(blocks, fmt.Sprintf(
-			"From: %s\nSubject: %s\nWhy: %s\n\"%s\"\nhttps://mail.google.com/mail/u/0/#inbox/%s",
-			it.Sender, it.Subject, it.Reason, it.BodyExcerpt, it.ThreadID))
+		switch it.Kind {
+		case "report":
+			blocks = append(blocks, fmt.Sprintf("[%s] %s\n%s", it.SourcePath, it.Summary, it.BodyExcerpt))
+		default:
+			blocks = append(blocks, fmt.Sprintf(
+				"From: %s\nSubject: %s\nWhy: %s\n\"%s\"\nhttps://mail.google.com/mail/u/0/#inbox/%s",
+				it.Sender, it.Subject, it.Reason, it.BodyExcerpt, it.ThreadID))
+		}
 	}
 	return strings.Join(blocks, "\n\n")
 }
