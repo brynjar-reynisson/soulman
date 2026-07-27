@@ -97,6 +97,7 @@ func (n *dndNotifier) Send(message string) error {
 		slog.Warn("dnd: pending file append failed, sending immediately instead", "path", n.path, "error", err)
 		return n.real.Send(message)
 	}
+	slog.Info("dnd: notification deferred to pending file", "path", n.path)
 	return nil
 }
 

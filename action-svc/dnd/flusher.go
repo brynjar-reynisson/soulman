@@ -42,12 +42,18 @@ func NewFlusher(window Window, pendingFilePath string, notifier notify.Notifier)
 	}
 }
 
-// Start performs the catch-up check (flush immediately if currently
+// Start launches the catch-up check (flush immediately if currently
 // outside the window and there's stale pending content — see
-// flushIfOutsideWindow), then launches the wake-at-window-end loop in a
-// background goroutine.
+// flushIfOutsideWindow) and the wake-at-window-end loop, both in background
+// goroutines, so Start itself never blocks. The catch-up check can reach a
+// real Discord send with retries (sendWithRetry: up to 3 attempts, each
+// with its own HTTP timeout, plus backoff between attempts) — running it
+// synchronously here would delay everything main.go sets up after calling
+// Start (NATS, the durable consumer, the HTTP server) on a slow or failing
+// Discord API at restart time. Mirrors scheduler.Scheduler.Start, which
+// also does nothing synchronous before its `go s.loop()`.
 func (f *Flusher) Start() {
-	f.flushIfOutsideWindow()
+	go f.flushIfOutsideWindow()
 	go f.loop()
 }
 
@@ -55,11 +61,14 @@ func (f *Flusher) Stop() {
 	close(f.stop)
 }
 
-// flushIfOutsideWindow is Start's synchronous catch-up check, factored out
-// so tests can exercise it directly without also spawning the background
-// wake-loop goroutine (which would otherwise race against a test's
-// assertions, since its wait duration is computed from the real clock via
-// time.Until while Now may be a fixed test value).
+// flushIfOutsideWindow is Start's catch-up check (launched in its own
+// goroutine by Start, so it never blocks startup — see Start's doc
+// comment), factored out so tests can also call it directly and
+// synchronously, without spawning either goroutine Start launches — in
+// particular without the background wake-loop goroutine, which would
+// otherwise race against a test's assertions, since its wait duration is
+// computed from the real clock via time.Until while Now may be a fixed
+// test value.
 func (f *Flusher) flushIfOutsideWindow() {
 	if !f.window.Active(f.Now()) {
 		f.FlushIfPending()
@@ -113,7 +122,9 @@ func (f *Flusher) FlushIfPending() {
 
 	if err := f.sendWithRetry(message); err != nil {
 		slog.Error("dnd: flush send failed after 3 attempts", "error", err)
+		return
 	}
+	slog.Info("dnd: flushed pending notifications", "entries", len(entries))
 }
 
 func (f *Flusher) sendWithRetry(message string) error {

@@ -133,7 +133,8 @@ func main() {
 
 	slog.Info("action-svc started",
 		"nats_url", cfg.NATSURL, "nats_connected", natsErr == nil, "http_port", cfg.HTTPPort,
-		"root", cfg.SoulmanRoot, "notifier", cfg.ReportNotifier, "feign_mode", cfg.FeignMode)
+		"root", cfg.SoulmanRoot, "notifier", cfg.ReportNotifier, "feign_mode", cfg.FeignMode,
+		"dnd_enabled", cfg.DNDEnabled, "dnd_start", cfg.DNDStart, "dnd_end", cfg.DNDEnd)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
