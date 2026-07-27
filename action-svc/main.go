@@ -10,6 +10,7 @@ import (
 
 	"soulman/action-svc/config"
 	"soulman/action-svc/dispatch"
+	"soulman/action-svc/dnd"
 	"soulman/action-svc/feign"
 	"soulman/action-svc/httpserver"
 	"soulman/action-svc/natsclient"
@@ -48,12 +49,29 @@ func main() {
 	}
 	notifier = feign.WrapNotifier(gate, notifier)
 
+	// Do-not-disturb window — see
+	// docs/superpowers/specs/2026-07-27-discord-do-not-disturb-design.md.
+	// Only the Batcher's real-time notification path is gated; the daily
+	// digest cron (sched, below) keeps using the plain feign-wrapped
+	// notifier, unaffected by DND. If DNDEnabled is false, batcherNotifier
+	// stays the same plain notifier sched uses — behavior identical to
+	// pre-DND.
+	dndWindow := dnd.Window{Start: cfg.DNDStart, End: cfg.DNDEnd}
+	pendingPath := filepath.Join(cfg.SoulmanRoot, "logs", "dnd-pending.txt")
+	batcherNotifier := notifier
+	if cfg.DNDEnabled {
+		batcherNotifier = dnd.WrapNotifier(dndWindow, pendingPath, notifier)
+		dndFlusher := dnd.NewFlusher(dndWindow, pendingPath, notifier) // starts its own background loop once Start is called
+		dndFlusher.Start()
+		defer dndFlusher.Stop()
+	}
+
 	// Batches important-email Discord notifications from the
 	// triage_gmail_email dispatch handler (30s grace / 2min max-wait — see
 	// docs/superpowers/specs/2026-07-18-gmail-triage-action-design.md).
-	// Reuses the same (feign-wrapped) notifier the daily cron already sends
-	// through.
-	batcher := notifybatch.New(notifybatch.DefaultGrace, notifybatch.DefaultMaxWait, notifier)
+	// Reuses the same (feign-wrapped, and — if DND is enabled — DND-wrapped)
+	// notifier the daily cron already sends through.
+	batcher := notifybatch.New(notifybatch.DefaultGrace, notifybatch.DefaultMaxWait, batcherNotifier)
 
 	// NATS is non-fatal at startup: the dispatch side degrades until
 	// reconnect, but the HTTP server and the daily cron don't depend on it.
@@ -115,7 +133,8 @@ func main() {
 
 	slog.Info("action-svc started",
 		"nats_url", cfg.NATSURL, "nats_connected", natsErr == nil, "http_port", cfg.HTTPPort,
-		"root", cfg.SoulmanRoot, "notifier", cfg.ReportNotifier, "feign_mode", cfg.FeignMode)
+		"root", cfg.SoulmanRoot, "notifier", cfg.ReportNotifier, "feign_mode", cfg.FeignMode,
+		"dnd_enabled", cfg.DNDEnabled, "dnd_start", cfg.DNDStart, "dnd_end", cfg.DNDEnd)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)

@@ -246,3 +246,93 @@ func TestLoad_FeignModeAbsent_DefaultsFalse(t *testing.T) {
 		t.Error("FeignMode = true, want false when absent from JSON")
 	}
 }
+
+func TestLoad_DoNotDisturb_AllFieldsSet(t *testing.T) {
+	unsetAllEnv()
+	defer unsetAllEnv()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	content := `{
+		"nats_url": "nats://localhost:4222",
+		"thinking_request_subject": "soulman.thinking.request",
+		"memory_write_subject": "soulman.memory.write",
+		"consumer_names": {"action_svc": "action-svc"},
+		"do_not_disturb": {"enabled": true, "start": "00:00", "end": "10:00"}
+	}`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	os.Setenv("CONFIG_PATH", path)
+	defer os.Unsetenv("CONFIG_PATH")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.DNDEnabled {
+		t.Error("DNDEnabled = false, want true")
+	}
+	if cfg.DNDStart != "00:00" {
+		t.Errorf("DNDStart = %q, want 00:00", cfg.DNDStart)
+	}
+	if cfg.DNDEnd != "10:00" {
+		t.Errorf("DNDEnd = %q, want 10:00", cfg.DNDEnd)
+	}
+}
+
+func TestLoad_DoNotDisturb_Absent_DefaultsDisabledAndEmpty(t *testing.T) {
+	unsetAllEnv()
+	defer unsetAllEnv()
+
+	configPath := writeConfigFile(t, "nats://localhost:4222", "soulman.thinking.request", "soulman.memory.write", "action-svc")
+	os.Setenv("CONFIG_PATH", configPath)
+	defer os.Unsetenv("CONFIG_PATH")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.DNDEnabled {
+		t.Error("DNDEnabled = true, want false when do_not_disturb absent from JSON")
+	}
+	if cfg.DNDStart != "" {
+		t.Errorf("DNDStart = %q, want empty when do_not_disturb absent", cfg.DNDStart)
+	}
+	if cfg.DNDEnd != "" {
+		t.Errorf("DNDEnd = %q, want empty when do_not_disturb absent", cfg.DNDEnd)
+	}
+}
+
+func TestLoad_DoNotDisturb_MalformedTime_PassesThroughWithoutError(t *testing.T) {
+	unsetAllEnv()
+	defer unsetAllEnv()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	content := `{
+		"nats_url": "nats://localhost:4222",
+		"thinking_request_subject": "soulman.thinking.request",
+		"memory_write_subject": "soulman.memory.write",
+		"consumer_names": {"action_svc": "action-svc"},
+		"do_not_disturb": {"enabled": true, "start": "not-a-time", "end": "10:00"}
+	}`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	os.Setenv("CONFIG_PATH", path)
+	defer os.Unsetenv("CONFIG_PATH")
+
+	// action-svc/config.Load performs no time-format validation of its own
+	// (matching how ReportSendTime is handled) — a malformed value is
+	// passed through unchanged; the actual "HH:MM" parsing and fallback to
+	// 10:00 happens downstream in dnd.Window.Active, covered by
+	// action-svc/dnd/window_test.go.
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load: want no error for a malformed do_not_disturb.start, got %v", err)
+	}
+	if cfg.DNDStart != "not-a-time" {
+		t.Errorf("DNDStart = %q, want the malformed value passed through unchanged", cfg.DNDStart)
+	}
+}

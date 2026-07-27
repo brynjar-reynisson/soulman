@@ -29,6 +29,7 @@ type Config struct {
 	Gmail         GmailConfig         `json:"gmail"`
 	SystemMonitor SystemMonitorConfig `json:"system_monitor"`
 	LogMonitor    LogMonitorConfig    `json:"log_monitor"`
+	DoNotDisturb  DNDConfig           `json:"do_not_disturb"`
 	Web           WebConfig           `json:"web"`
 }
 
@@ -97,6 +98,21 @@ type CheckConfig struct {
 // docs/superpowers/specs/2026-07-27-log-error-perception-design.md.
 type LogMonitorConfig struct {
 	ReconciliationIntervalSeconds int `json:"reconciliation_interval_seconds"`
+}
+
+// DNDConfig holds action-svc's do-not-disturb window settings for its
+// real-time Discord notification path (the notifybatch.Batcher chain) —
+// see docs/superpowers/specs/2026-07-27-discord-do-not-disturb-design.md.
+// Enabled lets the window be turned off without discarding the configured
+// times, matching FeignMode's explicit-boolean convention rather than an
+// implicit "empty times = disabled" signal. Start/End are not fatally
+// validated here — a malformed "HH:MM" silently falls back to 10:00 inside
+// action-svc/dnd.Window.Active, matching scheduler.parseSendTime's existing
+// loose convention for ReportSendTime.
+type DNDConfig struct {
+	Enabled bool   `json:"enabled"`
+	Start   string `json:"start"`
+	End     string `json:"end"`
 }
 
 // WebConfig holds web-svc's settings: the single owner email allowed full
