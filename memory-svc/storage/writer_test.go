@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"soulman/common"
+	"soulman/common/dephealth"
 	"soulman/memory-svc/storage"
 )
 
@@ -40,7 +41,7 @@ func TestWriter_Write_MarkedSynced_WhenDBSucceeds(t *testing.T) {
 	defer fl.Close()
 
 	id := fmt.Sprintf("write-synced-%d", time.Now().UnixNano())
-	w := storage.NewWriter(fl, db)
+	w := storage.NewWriter(fl, storage.NewDBHolder(db, dephealth.NewRegistry()))
 	s := &common.Stimulus{
 		StimulusID: id,
 		ReceivedAt: time.Now().UTC(),
@@ -90,7 +91,7 @@ func TestWriter_ReplayPending(t *testing.T) {
 		db.ExecCleanup(context.Background(), "DELETE FROM memory_dev.raw_inputs WHERE stimulus_id = $1", id)
 	})
 
-	w := storage.NewWriter(fl, db)
+	w := storage.NewWriter(fl, storage.NewDBHolder(db, dephealth.NewRegistry()))
 	if err := w.ReplayPending(context.Background()); err != nil {
 		t.Fatalf("ReplayPending: %v", err)
 	}

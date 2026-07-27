@@ -36,6 +36,12 @@ func NewDB(ctx context.Context, connStr, schema string) (*DB, error) {
 	return &DB{pool: pool, schema: schema}, nil
 }
 
+// Ping verifies the connection is still alive — used by Reconnector to
+// detect a mid-run failure during a quiet period with no write traffic.
+func (db *DB) Ping(ctx context.Context) error {
+	return db.pool.Ping(ctx)
+}
+
 func (db *DB) InsertRawInput(ctx context.Context, s *common.Stimulus) error {
 	raw, err := json.Marshal(s)
 	if err != nil {

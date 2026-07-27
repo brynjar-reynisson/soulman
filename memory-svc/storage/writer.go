@@ -10,10 +10,10 @@ import (
 
 type Writer struct {
 	fl *FileLog
-	db *DB
+	db *DBHolder
 }
 
-func NewWriter(fl *FileLog, db *DB) *Writer {
+func NewWriter(fl *FileLog, db *DBHolder) *Writer {
 	return &Writer{fl: fl, db: db}
 }
 
@@ -25,7 +25,7 @@ func (w *Writer) Write(ctx context.Context, s *common.Stimulus) error {
 		return fmt.Errorf("writer: file append failed: %w", err)
 	}
 
-	if w.db == nil {
+	if w.db == nil || w.db.Get() == nil {
 		slog.Warn("writer: DB unavailable, written to file only", "stimulus_id", s.StimulusID)
 		return nil
 	}
@@ -46,7 +46,7 @@ func (w *Writer) Write(ctx context.Context, s *common.Stimulus) error {
 // ReplayPending scans the file log for unsynced entries and inserts them into
 // Postgres. Called on startup before NATS subscription begins.
 func (w *Writer) ReplayPending(ctx context.Context) error {
-	if w.db == nil {
+	if w.db == nil || w.db.Get() == nil {
 		return nil
 	}
 
