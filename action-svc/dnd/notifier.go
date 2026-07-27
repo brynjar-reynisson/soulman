@@ -19,6 +19,19 @@ import (
 // accurately by splitting on it.
 const entrySeparator = "\n\n---\n\n"
 
+// pendingFileMu serializes all reads and writes of the do-not-disturb
+// pending file across goroutines: dndNotifier.append (below) writes to it
+// from whichever goroutine calls notify.Notifier.Send while the window is
+// active, and Flusher.FlushIfPending (flusher.go) reads-and-clears it from
+// its own background wake-loop goroutine. Without a shared lock, a flush
+// could race an in-progress append — reading a torn/partial write, or
+// clearing the file out from under a message that was appended between the
+// flush's read and its clear step, silently losing it. A single
+// package-level mutex (rather than a per-instance one on dndNotifier, or on
+// Flusher) is what makes the exclusion actually mutual: both types must
+// contend for the exact same lock instance around the exact same file.
+var pendingFileMu sync.Mutex
+
 // dndNotifier wraps a real notify.Notifier so Send appends to a pending
 // file instead of sending while window is active, and delegates straight
 // through otherwise. Mirrors feign.gatedNotifier's shape exactly.
@@ -27,7 +40,6 @@ type dndNotifier struct {
 	path   string
 	real   notify.Notifier
 	now    func() time.Time
-	mu     sync.Mutex
 }
 
 // WrapNotifier returns a notify.Notifier that appends to pendingFilePath
@@ -62,8 +74,8 @@ func (n *dndNotifier) Send(message string) error {
 // append writes message to the pending file, separating it from any
 // already-accumulated content with entrySeparator.
 func (n *dndNotifier) append(message string) error {
-	n.mu.Lock()
-	defer n.mu.Unlock()
+	pendingFileMu.Lock()
+	defer pendingFileMu.Unlock()
 
 	if err := os.MkdirAll(filepath.Dir(n.path), 0o755); err != nil {
 		return fmt.Errorf("dnd: mkdir for %s: %w", n.path, err)
