@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"soulman/common/sharedconfig"
@@ -25,6 +26,10 @@ type Config struct {
 
 	SystemMonitorPollIntervalSeconds int
 	SystemMonitorChecks              []sharedconfig.CheckConfig
+
+	LogDir                             string
+	LogMonitorCheckpointPath           string
+	LogMonitorReconcileIntervalSeconds int
 }
 
 func Load() (*Config, error) {
@@ -85,12 +90,17 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("shared config %s: system_monitor.checks[%d] (%s) has critical_threshold_percent below warning_threshold_percent", configPath, i, c.Type)
 		}
 	}
+	if shared.LogMonitor.ReconciliationIntervalSeconds <= 0 {
+		return nil, fmt.Errorf("shared config %s has no positive log_monitor.reconciliation_interval_seconds configured", configPath)
+	}
+
+	checkpointPath := env("CHECKPOINT_PATH", "./checkpoints.json")
 
 	return &Config{
 		NATSURL:           shared.NATSURL,
 		HTTPPort:          env("HTTP_PORT", "9001"),
 		WatchPaths:        shared.WatchPaths,
-		CheckpointPath:    env("CHECKPOINT_PATH", "./checkpoints.json"),
+		CheckpointPath:    checkpointPath,
 		ReconcileInterval: envInt("RECONCILE_INTERVAL_SECONDS", 30),
 		StimulusSubject:   shared.StimulusSubject,
 
@@ -103,6 +113,17 @@ func Load() (*Config, error) {
 
 		SystemMonitorPollIntervalSeconds: shared.SystemMonitor.PollIntervalSeconds,
 		SystemMonitorChecks:              shared.SystemMonitor.Checks,
+
+		// LOG_DIR is not currently set by perception-svc's run-perception-svc.ps1
+		// launchers in soulman-dev/soulman-prod (verified against the live
+		// scripts while writing this plan) — only memory-svc's launcher sets
+		// it, for its own unrelated file-log purpose. This default lets local
+		// `go run .` work out of the box; see this plan's self-review for the
+		// one-line manual addition needed in both environments' launcher
+		// scripts before this channel finds real sibling logs.
+		LogDir:                             env("LOG_DIR", "./logs"),
+		LogMonitorCheckpointPath:           filepath.Join(filepath.Dir(checkpointPath), "logmonitor-checkpoint.json"),
+		LogMonitorReconcileIntervalSeconds: shared.LogMonitor.ReconciliationIntervalSeconds,
 	}, nil
 }
 

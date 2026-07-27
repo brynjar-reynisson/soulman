@@ -30,6 +30,9 @@
       { "type": "service_health", "name": "agent-suite-backend", "target": "http://localhost:8091/health" }
     ]
   },
+  "log_monitor": {
+    "reconciliation_interval_seconds": 30
+  },
   "web": {
     "owner_email": "breynisson@gmail.com",
     "cors_allowed_origin": "http://localhost:5190",

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -164,5 +165,131 @@ func TestAppendReportEntry_NotImportant_WritesToFYIFile(t *testing.T) {
 	}
 	if filepath.Base(path) != "daily-report-2026-07-20-fyi.txt" {
 		t.Errorf("path = %q, want the not-important (-fyi) filename", filepath.Base(path))
+	}
+}
+
+func TestDispatch_AppendDailyReportEntry_Important_AddsToBatcher(t *testing.T) {
+	orig := dispatch.AppendReportEntry
+	dispatch.AppendReportEntry = func(root string, params json.RawMessage) (string, error) {
+		return "fake/path.txt", nil
+	}
+	defer func() { dispatch.AppendReportEntry = orig }()
+
+	pub := &fakePublisher{}
+	batcher := &fakeBatcher{}
+	d := dispatch.New(t.TempDir(), pub, batcher, nil)
+
+	params, _ := json.Marshal(map[string]any{
+		"summary":     `Disk space C:\ critical: 97% used (threshold 95%)`,
+		"raw_content": `Disk space C:\ critical: 97% used (threshold 95%)`,
+		"source_path": `system-monitor/disk_space/C:\`,
+		"occurred_at": "2026-07-27T10:05:00-06:00",
+		"important":   true,
+	})
+	req := common.ActionRequest{CorrelationID: "r1", ActionHint: "append_daily_report_entry", Parameters: params}
+	b, _ := json.Marshal(req)
+	d.Handle(b)
+
+	items := batcher.added()
+	if len(items) != 1 {
+		t.Fatalf("batcher.Add called %d times, want 1", len(items))
+	}
+	if items[0].Kind != "report" {
+		t.Errorf("Kind = %q, want report", items[0].Kind)
+	}
+}
+
+func TestDispatch_AppendDailyReportEntry_Important_TruncatesLongRawContent(t *testing.T) {
+	orig := dispatch.AppendReportEntry
+	dispatch.AppendReportEntry = func(root string, params json.RawMessage) (string, error) {
+		return "fake/path.txt", nil
+	}
+	defer func() { dispatch.AppendReportEntry = orig }()
+
+	pub := &fakePublisher{}
+	batcher := &fakeBatcher{}
+	d := dispatch.New(t.TempDir(), pub, batcher, nil)
+
+	// 250 runes: well past the 200-char excerpt convention shared with
+	// gmail_triage.go's excerptLen — stands in for folder-watcher's
+	// ErrorReportRule carrying an entire multi-KB error file as raw_content.
+	longContent := strings.Repeat("x", 250)
+	params, _ := json.Marshal(map[string]any{
+		"summary":     "log-error/memory-svc",
+		"raw_content": longContent,
+		"source_path": "log-error/memory-svc",
+		"occurred_at": "2026-07-27T10:05:00-06:00",
+		"important":   true,
+	})
+	req := common.ActionRequest{CorrelationID: "r3", ActionHint: "append_daily_report_entry", Parameters: params}
+	b, _ := json.Marshal(req)
+	d.Handle(b)
+
+	items := batcher.added()
+	if len(items) != 1 {
+		t.Fatalf("batcher.Add called %d times, want 1", len(items))
+	}
+	want := strings.Repeat("x", 200) + "…"
+	if items[0].BodyExcerpt != want {
+		t.Errorf("BodyExcerpt = %q (len %d), want 200 x's + ellipsis (len %d)", items[0].BodyExcerpt, len(items[0].BodyExcerpt), len(want))
+	}
+}
+
+func TestDispatch_AppendDailyReportEntry_Important_ShortRawContentPassedThroughUnchanged(t *testing.T) {
+	orig := dispatch.AppendReportEntry
+	dispatch.AppendReportEntry = func(root string, params json.RawMessage) (string, error) {
+		return "fake/path.txt", nil
+	}
+	defer func() { dispatch.AppendReportEntry = orig }()
+
+	pub := &fakePublisher{}
+	batcher := &fakeBatcher{}
+	d := dispatch.New(t.TempDir(), pub, batcher, nil)
+
+	shortContent := "memory-svc: DB insert failed"
+	params, _ := json.Marshal(map[string]any{
+		"summary":     "log-error/memory-svc",
+		"raw_content": shortContent,
+		"source_path": "log-error/memory-svc",
+		"occurred_at": "2026-07-27T10:05:00-06:00",
+		"important":   true,
+	})
+	req := common.ActionRequest{CorrelationID: "r4", ActionHint: "append_daily_report_entry", Parameters: params}
+	b, _ := json.Marshal(req)
+	d.Handle(b)
+
+	items := batcher.added()
+	if len(items) != 1 {
+		t.Fatalf("batcher.Add called %d times, want 1", len(items))
+	}
+	if items[0].BodyExcerpt != shortContent {
+		t.Errorf("BodyExcerpt = %q, want unchanged %q", items[0].BodyExcerpt, shortContent)
+	}
+}
+
+func TestDispatch_AppendDailyReportEntry_NotImportant_SkipsBatcher(t *testing.T) {
+	orig := dispatch.AppendReportEntry
+	dispatch.AppendReportEntry = func(root string, params json.RawMessage) (string, error) {
+		return "fake/path.txt", nil
+	}
+	defer func() { dispatch.AppendReportEntry = orig }()
+
+	pub := &fakePublisher{}
+	batcher := &fakeBatcher{}
+	d := dispatch.New(t.TempDir(), pub, batcher, nil)
+
+	params, _ := json.Marshal(map[string]any{
+		"summary":     "routine note",
+		"raw_content": "",
+		"source_path": `C:\errors\file.txt`,
+		"occurred_at": "2026-07-27T10:05:00-06:00",
+		"important":   false,
+	})
+	req := common.ActionRequest{CorrelationID: "r2", ActionHint: "append_daily_report_entry", Parameters: params}
+	b, _ := json.Marshal(req)
+	d.Handle(b)
+
+	if items := batcher.added(); len(items) != 0 {
+		t.Errorf("batcher.Add called %d times, want 0 for a not-important entry", len(items))
 	}
 }
