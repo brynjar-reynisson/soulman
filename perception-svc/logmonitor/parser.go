@@ -26,6 +26,11 @@ var lineRe = regexp.MustCompile(`^\S+\s+\S+\s+(ERROR|WARN|INFO|DEBUG)\s+(.*)$`)
 // reliably marks where msg ends and attrs begin.
 var attrStartRe = regexp.MustCompile(`\s[A-Za-z_][A-Za-z0-9_]*=`)
 
+// attrAtStartRe matches an attribute at the very start of a string
+// (no leading space). Used to detect when there is no message text
+// before the first attribute, indicating an empty message.
+var attrAtStartRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
+
 // ParsedLine is one successfully parsed ERROR-level log line.
 type ParsedLine struct {
 	Level string
@@ -48,8 +53,15 @@ func parseLine(line string) (ParsedLine, bool) {
 	}
 	rest := m[2]
 	msg := rest
-	if loc := attrStartRe.FindStringIndex(rest); loc != nil {
+
+	// If rest starts immediately with an attribute (no message text),
+	// msg is empty. This prevents an empty message from absorbing
+	// the attributes into the Msg field, which would break dedup.
+	if attrAtStartRe.MatchString(rest) {
+		msg = ""
+	} else if loc := attrStartRe.FindStringIndex(rest); loc != nil {
 		msg = rest[:loc[0]]
 	}
+
 	return ParsedLine{Level: level, Msg: msg}, true
 }
