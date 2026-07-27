@@ -39,6 +39,12 @@ See `docs/superpowers/specs/2026-07-20-daily-report-importance-split-design.md`.
 
 `web-svc/reports` is a separate module that already deliberately duplicates this package's `PathForDate`/`Read` logic (see that package's own doc comment) rather than cross-importing — its copy was updated in lockstep by hand, the same way the two copies have always been kept in sync.
 
+## Real-time Discord notification now applies to every important report entry (added 2026-07-27)
+
+Previously, `Important: true` on an `append_daily_report_entry` action only changed which section of the daily report file the entry landed in — only `triage_gmail_email` triggered a real-time Discord notification. `system-monitor`'s critical/recovery alerts and any `folder-watcher` (`ErrorReportRule` always sets `Important: true`) or `log-error` entry now also queue on the same `notifybatch.Batcher` used by Gmail triage. This is an intentional behavior change flagged in `docs/superpowers/specs/2026-07-27-log-error-perception-design.md` — it closes the gap `2026-07-18-system-monitor-channel-design.md` explicitly called out of scope ("an immediate Discord ping on critical, the way Gmail triage does").
+
+`notifybatch.Item` gained a `Kind` field (`"gmail"` | `"report"`) so `formatBatch` can render each shape correctly in a single flushed message, including a batch that mixes both kinds. `feign_mode` (already `true` in both `config/dev.json` and `config/prod.json`) governs these sends exactly like it already governs Gmail's — no separate gate was needed.
+
 ## Leveled logging (log/slog, added 2026-07-27)
 
 All `log.Printf`/`log.Fatalf` call sites across `main.go`, `scheduler`, `dispatch`, and `natsclient` replaced with stdlib `log/slog` (`slog.Error`/`slog.Warn`/`slog.Info`) — no new dependency. The existing manual `"WARNING: ..."` string prefixes in `main.go` (NATS unavailable at startup, publisher/consumer setup failures) became real `slog.Warn` calls with the redundant literal text dropped. Final give-up-after-retry failures (report append, notifier send) and outcome-publish failures are `slog.Error`; the single retry-in-progress attempt before that is `slog.Warn`. Startup `log.Fatalf` calls became `slog.Error(...)` followed by an explicit `os.Exit(1)`.
