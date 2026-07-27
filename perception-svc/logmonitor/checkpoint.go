@@ -42,6 +42,11 @@ func loadCheckpoint(path string) *checkpoint {
 		return c
 	}
 
+	// json.Unmarshal of null succeeds and sets data to nil (documented Go behavior),
+	// which would cause a panic on subsequent map assignment. Default to empty.
+	if data == nil {
+		data = map[string]int64{}
+	}
 	c.offset = data
 	return c
 }

@@ -26,6 +26,23 @@ func TestLoadCheckpoint_CorruptFile_StartsEmpty(t *testing.T) {
 	}
 }
 
+func TestLoadCheckpoint_NullJSON_PreventsNilMapPanic(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "logmonitor-checkpoint.json")
+	if err := os.WriteFile(path, []byte("null"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	c := loadCheckpoint(path)
+	// The critical test: mark() must not panic on a nil map (which would happen without the fix)
+	if err := c.mark("memory-svc-startup-err.log", 1024); err != nil {
+		t.Fatalf("mark should not fail after loading null JSON: %v", err)
+	}
+	// Verify the value round-tripped correctly
+	off, ok := c.offsetFor("memory-svc-startup-err.log")
+	if !ok || off != 1024 {
+		t.Errorf("offsetFor after null-json load and mark = (%d, %v), want (1024, true)", off, ok)
+	}
+}
+
 func TestCheckpoint_Mark_PersistsToDisk(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "logmonitor-checkpoint.json")
 	c := loadCheckpoint(path)
