@@ -30,6 +30,10 @@ There is still no correction/feedback loop for miscalibrated verdicts — descri
 
 `systemMonitorImportant` (`thinking-svc/rules/system_monitor.go`) treats `severity == "ok"` as important, same as `critical` — this isn't a guess, it follows directly from `perception-svc/sysmonitor`'s edge-triggered publish design: a `Stimulus` is only ever published when severity *changes*, so a published `"ok"` can never represent "still fine" (that state is never published at all) — it always means "just recovered from warning or critical." If `sysmonitor`'s publish semantics ever changed to also publish steady-state pings, this reasoning would break and `systemMonitorImportant` would need revisiting.
 
+## Log Error rule has no non-important tier (added 2026-07-27)
+
+Unlike `SystemMonitorRule` (`warning` is not important) or `GmailTriageRule` (DeepSeek judges), `LogErrorRule` always sets `Important: true` — there's no lower tier to distinguish because `logmonitor` only ever publishes `channel: "log-error"` stimuli for `ERROR`-level lines in the first place (`WARN`/`INFO` never reach thinking-svc at all, filtered at the source in `perception-svc/logmonitor`). See `docs/superpowers/specs/2026-07-27-log-error-perception-design.md`.
+
 ## Leveled logging (log/slog, added 2026-07-27)
 
 All `log.Printf`/`log.Fatalf` call sites in `main.go` and `natsclient/consumer.go` replaced with stdlib `log/slog` (`slog.Error`/`slog.Warn`/`slog.Info`) — no new dependency. Unparseable stimuli and rule-handling failures (dropped, no redelivery for `soulman.thinking.request`) are `slog.Error`; a blank `DEEPSEEK_API_KEY` (non-fatal, falls back to deterministic summaries) is `slog.Warn`; started/listening/shutting-down messages are `slog.Info`. Startup `log.Fatalf` calls became `slog.Error(...)` followed by an explicit `os.Exit(1)`.
