@@ -24,6 +24,7 @@ var Registry = []Rule{
 	GmailTriageRule,
 	CLINoteRule,
 	SystemMonitorRule,
+	LogErrorRule,
 }
 
 // Match returns a pointer to the first rule in Registry whose Match
