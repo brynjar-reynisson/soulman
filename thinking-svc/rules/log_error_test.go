@@ -75,11 +75,12 @@ func TestLogErrorRule_Handle_BuildsActionRequest(t *testing.T) {
 	if err := json.Unmarshal(req.Parameters, &params); err != nil {
 		t.Fatalf("decode Parameters: %v", err)
 	}
-	if params.Summary != rawText {
-		t.Errorf("Summary = %q, want %q", params.Summary, rawText)
+	wantSummary := "memory-svc: " + rawText
+	if params.Summary != wantSummary {
+		t.Errorf("Summary = %q, want %q", params.Summary, wantSummary)
 	}
 	if params.RawContent != rawText {
-		t.Errorf("RawContent = %q, want %q", params.RawContent, rawText)
+		t.Errorf("RawContent = %q, want %q (unprefixed, verbatim)", params.RawContent, rawText)
 	}
 	if params.SourcePath != "log-error/memory-svc" {
 		t.Errorf("SourcePath = %q, want log-error/memory-svc", params.SourcePath)
@@ -108,6 +109,41 @@ func TestLogErrorRule_Handle_AlwaysImportant(t *testing.T) {
 			}
 			if !params.Important {
 				t.Errorf("service=%q: important = %v, want true", svc, params.Important)
+			}
+		})
+	}
+}
+
+func TestLogErrorRule_Handle_SummaryPrefixedWithService(t *testing.T) {
+	// formatEntry (action-svc/report/report.go) renders
+	// filepath.Dir(SourcePath), which collapses "log-error/<service>" down
+	// to just "log-error" — so without a Summary prefix, the daily report
+	// and real-time Discord message have no way to tell which service
+	// failed (the raw slog line is prefixed with the *package*, e.g.
+	// "writer:", not the service). Cover each of the five services.
+	cases := []string{"memory-svc", "perception-svc", "thinking-svc", "action-svc", "web-svc"}
+	for _, svc := range cases {
+		t.Run(svc, func(t *testing.T) {
+			rawText := "2026/07/27 10:05:00 ERROR writer: DB insert failed"
+			s := newLogErrorStimulus(rawText, svc, time.Now())
+
+			req, err := rules.LogErrorRule.Handle(context.Background(), s, &fakeSummarizer{})
+			if err != nil {
+				t.Fatalf("Handle: %v", err)
+			}
+			var params struct {
+				Summary    string `json:"summary"`
+				RawContent string `json:"raw_content"`
+			}
+			if err := json.Unmarshal(req.Parameters, &params); err != nil {
+				t.Fatalf("decode Parameters: %v", err)
+			}
+			wantSummary := svc + ": " + rawText
+			if params.Summary != wantSummary {
+				t.Errorf("service=%q: Summary = %q, want %q", svc, params.Summary, wantSummary)
+			}
+			if params.RawContent != rawText {
+				t.Errorf("service=%q: RawContent = %q, want unprefixed %q", svc, params.RawContent, rawText)
 			}
 		})
 	}

@@ -27,10 +27,20 @@ var LogErrorRule = Rule{
 }
 
 func handleLogError(_ context.Context, s *common.Stimulus, _ llm.Client) (*common.ActionRequest, error) {
+	service := logErrorService(s)
 	params, err := json.Marshal(errorReportParams{
-		Summary:    s.Content.RawText,
+		// Summary is prefixed with the service name because SourcePath's
+		// "log-error" directory (report.formatEntry renders
+		// filepath.Dir(SourcePath), which collapses "log-error/<service>"
+		// down to just "log-error") drops it, and the raw slog line itself
+		// is prefixed with the *package* (e.g. "writer:", "checkpoint:"),
+		// not the *service* — without this, the daily report and the
+		// real-time Discord message would have no way to tell which of the
+		// five services actually failed. RawContent is deliberately left
+		// unprefixed so it still reads as the verbatim log line.
+		Summary:    fmt.Sprintf("%s: %s", service, s.Content.RawText),
 		RawContent: s.Content.RawText,
-		SourcePath: logErrorSourcePath(s),
+		SourcePath: "log-error/" + service,
 		OccurredAt: s.OccurredAt,
 		Important:  true,
 	})
@@ -51,16 +61,17 @@ func handleLogError(_ context.Context, s *common.Stimulus, _ llm.Client) (*commo
 	return req, nil
 }
 
-// logErrorSourcePath builds "log-error/<service>" from
-// channel_metadata.channel_specific.service — parallels
-// systemMonitorSourcePath/watchedPath's same channel_specific extraction
-// pattern.
-func logErrorSourcePath(s *common.Stimulus) string {
+// logErrorService extracts channel_metadata.channel_specific.service —
+// parallels systemMonitorSourcePath/watchedPath's same channel_specific
+// extraction pattern. Shared by handleLogError (for the Summary prefix) and
+// the SourcePath it builds, so the two never disagree on which service a
+// stimulus came from.
+func logErrorService(s *common.Stimulus) string {
 	var meta struct {
 		Service string `json:"service"`
 	}
 	if len(s.ChannelMeta.ChannelSpecific) > 0 {
 		_ = json.Unmarshal(s.ChannelMeta.ChannelSpecific, &meta)
 	}
-	return "log-error/" + meta.Service
+	return meta.Service
 }
