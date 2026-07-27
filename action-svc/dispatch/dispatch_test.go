@@ -197,3 +197,30 @@ func TestDispatch_AppendDailyReportEntry_Important_AddsToBatcher(t *testing.T) {
 		t.Errorf("Kind = %q, want report", items[0].Kind)
 	}
 }
+
+func TestDispatch_AppendDailyReportEntry_NotImportant_SkipsBatcher(t *testing.T) {
+	orig := dispatch.AppendReportEntry
+	dispatch.AppendReportEntry = func(root string, params json.RawMessage) (string, error) {
+		return "fake/path.txt", nil
+	}
+	defer func() { dispatch.AppendReportEntry = orig }()
+
+	pub := &fakePublisher{}
+	batcher := &fakeBatcher{}
+	d := dispatch.New(t.TempDir(), pub, batcher, nil)
+
+	params, _ := json.Marshal(map[string]any{
+		"summary":     "routine note",
+		"raw_content": "",
+		"source_path": `C:\errors\file.txt`,
+		"occurred_at": "2026-07-27T10:05:00-06:00",
+		"important":   false,
+	})
+	req := common.ActionRequest{CorrelationID: "r2", ActionHint: "append_daily_report_entry", Parameters: params}
+	b, _ := json.Marshal(req)
+	d.Handle(b)
+
+	if items := batcher.added(); len(items) != 0 {
+		t.Errorf("batcher.Add called %d times, want 0 for a not-important entry", len(items))
+	}
+}
