@@ -28,6 +28,7 @@ type Config struct {
 	ConsumerNames ConsumerNames       `json:"consumer_names"`
 	Gmail         GmailConfig         `json:"gmail"`
 	SystemMonitor SystemMonitorConfig `json:"system_monitor"`
+	LogMonitor    LogMonitorConfig    `json:"log_monitor"`
 	Web           WebConfig           `json:"web"`
 }
 
@@ -85,6 +86,17 @@ type CheckConfig struct {
 	Target                   string  `json:"target,omitempty"` // service_health only
 	WarningThresholdPercent  float64 `json:"warning_threshold_percent,omitempty"`
 	CriticalThresholdPercent float64 `json:"critical_threshold_percent,omitempty"`
+}
+
+// LogMonitorConfig holds perception-svc's Log Error channel settings: how
+// often the reconciliation poll safety-net runs, alongside fsnotify's
+// instant-reaction detection. Unlike GmailConfig, this channel has no
+// external credential dependency and no reason to ever be optional — same
+// fatal-fast-if-absent-or-non-positive treatment as
+// system_monitor.poll_interval_seconds. See
+// docs/superpowers/specs/2026-07-27-log-error-perception-design.md.
+type LogMonitorConfig struct {
+	ReconciliationIntervalSeconds int `json:"reconciliation_interval_seconds"`
 }
 
 // WebConfig holds web-svc's settings: the single owner email allowed full

@@ -29,12 +29,17 @@ type systemMonitorFields struct {
 	Checks              []checkFields `json:"checks"`
 }
 
+type logMonitorFields struct {
+	ReconciliationIntervalSeconds int `json:"reconciliation_interval_seconds"`
+}
+
 type sharedFields struct {
 	WatchPaths      []string            `json:"watch_paths"`
 	NATSURL         string              `json:"nats_url"`
 	StimulusSubject string              `json:"stimulus_subject"`
 	Gmail           gmailFields         `json:"gmail"`
 	SystemMonitor   systemMonitorFields `json:"system_monitor"`
+	LogMonitor      logMonitorFields    `json:"log_monitor"`
 }
 
 // validGmail is a ready-to-use gmailFields value for tests that aren't
@@ -57,7 +62,11 @@ var validSystemMonitor = systemMonitorFields{
 	},
 }
 
-func writeConfigFile(t *testing.T, watchPaths []string, natsURL, stimulusSubject string, gmail gmailFields, sysMonitor systemMonitorFields) string {
+// validLogMonitor is the same kind of ready-to-use fixture for log_monitor,
+// fatally validated regardless of any credential (it has none).
+var validLogMonitor = logMonitorFields{ReconciliationIntervalSeconds: 30}
+
+func writeConfigFile(t *testing.T, watchPaths []string, natsURL, stimulusSubject string, gmail gmailFields, sysMonitor systemMonitorFields, logMonitor logMonitorFields) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
@@ -68,6 +77,7 @@ func writeConfigFile(t *testing.T, watchPaths []string, natsURL, stimulusSubject
 		StimulusSubject: stimulusSubject,
 		Gmail:           gmail,
 		SystemMonitor:   sysMonitor,
+		LogMonitor:      logMonitor,
 	})
 	if err != nil {
 		t.Fatalf("json.Marshal: %v", err)
@@ -86,13 +96,14 @@ func unsetAllEnv() {
 	os.Unsetenv("GMAIL_CLIENT_ID")
 	os.Unsetenv("GMAIL_CLIENT_SECRET")
 	os.Unsetenv("GMAIL_REFRESH_TOKEN")
+	os.Unsetenv("LOG_DIR")
 }
 
 func TestLoad_Defaults(t *testing.T) {
 	unsetAllEnv()
 	defer unsetAllEnv()
 
-	configPath := writeConfigFile(t, []string{`C:\Users\Lenovo\DigitalMe\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, validSystemMonitor)
+	configPath := writeConfigFile(t, []string{`C:\Users\Lenovo\DigitalMe\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, validSystemMonitor, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 
 	cfg, err := config.Load()
@@ -142,6 +153,15 @@ func TestLoad_Defaults(t *testing.T) {
 	if len(cfg.SystemMonitorChecks) != 1 || cfg.SystemMonitorChecks[0].Type != "disk_space" {
 		t.Errorf("SystemMonitorChecks = %+v, want one disk_space check", cfg.SystemMonitorChecks)
 	}
+	if cfg.LogDir != "./logs" {
+		t.Errorf("LogDir = %q, want ./logs", cfg.LogDir)
+	}
+	if cfg.LogMonitorCheckpointPath != filepath.Join(".", "logmonitor-checkpoint.json") {
+		t.Errorf("LogMonitorCheckpointPath = %q, want %q", cfg.LogMonitorCheckpointPath, filepath.Join(".", "logmonitor-checkpoint.json"))
+	}
+	if cfg.LogMonitorReconcileIntervalSeconds != 30 {
+		t.Errorf("LogMonitorReconcileIntervalSeconds = %d, want 30", cfg.LogMonitorReconcileIntervalSeconds)
+	}
 }
 
 func TestLoad_SharedConfigValues(t *testing.T) {
@@ -153,7 +173,7 @@ func TestLoad_SharedConfigValues(t *testing.T) {
 		SeenLabel:           "soulman/seen-dev",
 		PollIntervalSeconds: 60,
 	}
-	configPath := writeConfigFile(t, []string{`C:\a\errors`, `C:\b\errors`, `C:\c\errors`}, "nats://remote:4222", "soulman.dev.stimulus.raw", gmail, validSystemMonitor)
+	configPath := writeConfigFile(t, []string{`C:\a\errors`, `C:\b\errors`, `C:\c\errors`}, "nats://remote:4222", "soulman.dev.stimulus.raw", gmail, validSystemMonitor, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 	os.Setenv("HTTP_PORT", "9999")
 	os.Setenv("CHECKPOINT_PATH", "./data/checkpoints.json")
@@ -161,6 +181,7 @@ func TestLoad_SharedConfigValues(t *testing.T) {
 	os.Setenv("GMAIL_CLIENT_ID", "client-123")
 	os.Setenv("GMAIL_CLIENT_SECRET", "secret-456")
 	os.Setenv("GMAIL_REFRESH_TOKEN", "refresh-789")
+	os.Setenv("LOG_DIR", "./data/logs")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -209,13 +230,19 @@ func TestLoad_SharedConfigValues(t *testing.T) {
 	if cfg.GmailRefreshToken != "refresh-789" {
 		t.Errorf("GmailRefreshToken = %q, want refresh-789", cfg.GmailRefreshToken)
 	}
+	if cfg.LogDir != "./data/logs" {
+		t.Errorf("LogDir = %q, want ./data/logs", cfg.LogDir)
+	}
+	if cfg.LogMonitorCheckpointPath != filepath.Join("data", "logmonitor-checkpoint.json") {
+		t.Errorf("LogMonitorCheckpointPath = %q, want %q", cfg.LogMonitorCheckpointPath, filepath.Join("data", "logmonitor-checkpoint.json"))
+	}
 }
 
 func TestLoad_InvalidReconcileInterval_FallsBackToDefault(t *testing.T) {
 	unsetAllEnv()
 	defer unsetAllEnv()
 
-	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, validSystemMonitor)
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, validSystemMonitor, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 	os.Setenv("RECONCILE_INTERVAL_SECONDS", "not-a-number")
 
@@ -245,7 +272,7 @@ func TestLoad_EmptyWatchPaths_ReturnsError(t *testing.T) {
 	unsetAllEnv()
 	defer unsetAllEnv()
 
-	configPath := writeConfigFile(t, []string{}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, validSystemMonitor)
+	configPath := writeConfigFile(t, []string{}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, validSystemMonitor, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 
 	_, err := config.Load()
@@ -258,7 +285,7 @@ func TestLoad_EmptyNATSURL_ReturnsError(t *testing.T) {
 	unsetAllEnv()
 	defer unsetAllEnv()
 
-	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "", "soulman.stimulus.raw", validGmail, validSystemMonitor)
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "", "soulman.stimulus.raw", validGmail, validSystemMonitor, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 
 	_, err := config.Load()
@@ -271,7 +298,7 @@ func TestLoad_EmptyStimulusSubject_ReturnsError(t *testing.T) {
 	unsetAllEnv()
 	defer unsetAllEnv()
 
-	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "", validGmail, validSystemMonitor)
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "", validGmail, validSystemMonitor, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 
 	_, err := config.Load()
@@ -286,7 +313,7 @@ func TestLoad_EmptyGmailQuery_ReturnsError(t *testing.T) {
 
 	gmail := validGmail
 	gmail.Query = ""
-	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", gmail, validSystemMonitor)
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", gmail, validSystemMonitor, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 
 	_, err := config.Load()
@@ -301,7 +328,7 @@ func TestLoad_EmptyGmailSeenLabel_ReturnsError(t *testing.T) {
 
 	gmail := validGmail
 	gmail.SeenLabel = ""
-	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", gmail, validSystemMonitor)
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", gmail, validSystemMonitor, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 
 	_, err := config.Load()
@@ -316,7 +343,7 @@ func TestLoad_ZeroGmailPollInterval_ReturnsError(t *testing.T) {
 
 	gmail := validGmail
 	gmail.PollIntervalSeconds = 0
-	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", gmail, validSystemMonitor)
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", gmail, validSystemMonitor, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 
 	_, err := config.Load()
@@ -331,7 +358,7 @@ func TestLoad_EmptySystemMonitorChecks_ReturnsError(t *testing.T) {
 
 	sysMon := validSystemMonitor
 	sysMon.Checks = nil
-	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon)
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 
 	_, err := config.Load()
@@ -346,7 +373,7 @@ func TestLoad_ZeroSystemMonitorPollInterval_ReturnsError(t *testing.T) {
 
 	sysMon := validSystemMonitor
 	sysMon.PollIntervalSeconds = 0
-	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon)
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 
 	_, err := config.Load()
@@ -361,7 +388,7 @@ func TestLoad_UnknownSystemMonitorCheckType_ReturnsError(t *testing.T) {
 
 	sysMon := validSystemMonitor
 	sysMon.Checks = []checkFields{{Type: "network", WarningThresholdPercent: 80}}
-	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon)
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 
 	_, err := config.Load()
@@ -376,7 +403,7 @@ func TestLoad_DiskSpaceCheckMissingPath_ReturnsError(t *testing.T) {
 
 	sysMon := validSystemMonitor
 	sysMon.Checks = []checkFields{{Type: "disk_space", WarningThresholdPercent: 80}}
-	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon)
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 
 	_, err := config.Load()
@@ -391,7 +418,7 @@ func TestLoad_ZeroWarningThreshold_ReturnsError(t *testing.T) {
 
 	sysMon := validSystemMonitor
 	sysMon.Checks = []checkFields{{Type: "cpu", WarningThresholdPercent: 0}}
-	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon)
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 
 	_, err := config.Load()
@@ -406,7 +433,7 @@ func TestLoad_CriticalThresholdBelowWarning_ReturnsError(t *testing.T) {
 
 	sysMon := validSystemMonitor
 	sysMon.Checks = []checkFields{{Type: "disk_space", Path: `C:\`, WarningThresholdPercent: 90, CriticalThresholdPercent: 80}}
-	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon)
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 
 	_, err := config.Load()
@@ -424,7 +451,7 @@ func TestLoad_ValidMemoryAndCPUChecks_NoPathRequired(t *testing.T) {
 		{Type: "memory", WarningThresholdPercent: 85},
 		{Type: "cpu", WarningThresholdPercent: 90},
 	}
-	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon)
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 
 	if _, err := config.Load(); err != nil {
@@ -438,7 +465,7 @@ func TestLoad_ServiceHealthCheckMissingName_ReturnsError(t *testing.T) {
 
 	sysMon := validSystemMonitor
 	sysMon.Checks = []checkFields{{Type: "service_health", Target: "localhost:5176"}}
-	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon)
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 
 	_, err := config.Load()
@@ -453,7 +480,7 @@ func TestLoad_ServiceHealthCheckMissingTarget_ReturnsError(t *testing.T) {
 
 	sysMon := validSystemMonitor
 	sysMon.Checks = []checkFields{{Type: "service_health", Name: "agent-suite-backend"}}
-	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon)
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 
 	_, err := config.Load()
@@ -471,7 +498,7 @@ func TestLoad_ValidServiceHealthCheck_NoThresholdRequired(t *testing.T) {
 		{Type: "service_health", Name: "agent-suite-backend", Target: "http://localhost:8091/health"},
 		{Type: "service_health", Name: "digital-me-frontend", Target: "localhost:5173"},
 	}
-	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon)
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon, validLogMonitor)
 	os.Setenv("CONFIG_PATH", configPath)
 
 	cfg, err := config.Load()
@@ -483,5 +510,20 @@ func TestLoad_ValidServiceHealthCheck_NoThresholdRequired(t *testing.T) {
 	}
 	if cfg.SystemMonitorChecks[0].Name != "agent-suite-backend" || cfg.SystemMonitorChecks[0].Target != "http://localhost:8091/health" {
 		t.Errorf("SystemMonitorChecks[0] = %+v, want agent-suite-backend/http://localhost:8091/health", cfg.SystemMonitorChecks[0])
+	}
+}
+
+func TestLoad_ZeroLogMonitorReconciliationInterval_ReturnsError(t *testing.T) {
+	unsetAllEnv()
+	defer unsetAllEnv()
+
+	logMon := validLogMonitor
+	logMon.ReconciliationIntervalSeconds = 0
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, validSystemMonitor, logMon)
+	os.Setenv("CONFIG_PATH", configPath)
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("Load: want error for zero log_monitor.reconciliation_interval_seconds, got nil")
 	}
 }
