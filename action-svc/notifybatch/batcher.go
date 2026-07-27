@@ -2,6 +2,7 @@ package notifybatch
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -101,7 +102,11 @@ func (b *Batcher) Flush() {
 	if len(items) == 0 {
 		return
 	}
-	_ = b.notifier.Send(formatBatch(items))
+	if err := b.notifier.Send(formatBatch(items)); err != nil {
+		slog.Error("notifybatch: flush send failed, batch lost", "items", len(items), "error", err)
+		return
+	}
+	slog.Info("notifybatch: flushed", "items", len(items))
 }
 
 // formatBatch branches per item on Kind: "report" items render as a plain
