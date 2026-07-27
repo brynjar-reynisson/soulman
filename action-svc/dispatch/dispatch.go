@@ -57,6 +57,12 @@ func (d *Dispatcher) Handle(msg []byte) {
 }
 
 func (d *Dispatcher) dispatchAppendDailyReportEntry(req common.ActionRequest) {
+	var p ReportEntryParams
+	// Best-effort: if this fails, AppendReportEntry's own unmarshal below
+	// fails identically and status becomes "failed"; p stays zero-value, so
+	// no batcher.Add fires for an unparseable request.
+	_ = json.Unmarshal(req.Parameters, &p)
+
 	_, err := AppendReportEntry(d.root, req.Parameters)
 	if err != nil {
 		slog.Warn("dispatch: append_daily_report_entry failed, retrying once", "correlation_id", req.CorrelationID, "error", err)
@@ -67,6 +73,15 @@ func (d *Dispatcher) dispatchAppendDailyReportEntry(req common.ActionRequest) {
 	if err != nil {
 		status = "failed"
 		slog.Error("dispatch: append_daily_report_entry failed after retry, giving up", "correlation_id", req.CorrelationID, "error", err)
+	}
+
+	if p.Important && d.batcher != nil {
+		d.batcher.Add(notifybatch.Item{
+			Kind:        "report",
+			Summary:     p.Summary,
+			SourcePath:  p.SourcePath,
+			BodyExcerpt: p.RawContent,
+		})
 	}
 
 	if d.publisher == nil {

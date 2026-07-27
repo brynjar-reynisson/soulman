@@ -166,3 +166,34 @@ func TestAppendReportEntry_NotImportant_WritesToFYIFile(t *testing.T) {
 		t.Errorf("path = %q, want the not-important (-fyi) filename", filepath.Base(path))
 	}
 }
+
+func TestDispatch_AppendDailyReportEntry_Important_AddsToBatcher(t *testing.T) {
+	orig := dispatch.AppendReportEntry
+	dispatch.AppendReportEntry = func(root string, params json.RawMessage) (string, error) {
+		return "fake/path.txt", nil
+	}
+	defer func() { dispatch.AppendReportEntry = orig }()
+
+	pub := &fakePublisher{}
+	batcher := &fakeBatcher{}
+	d := dispatch.New(t.TempDir(), pub, batcher, nil)
+
+	params, _ := json.Marshal(map[string]any{
+		"summary":     `Disk space C:\ critical: 97% used (threshold 95%)`,
+		"raw_content": `Disk space C:\ critical: 97% used (threshold 95%)`,
+		"source_path": `system-monitor/disk_space/C:\`,
+		"occurred_at": "2026-07-27T10:05:00-06:00",
+		"important":   true,
+	})
+	req := common.ActionRequest{CorrelationID: "r1", ActionHint: "append_daily_report_entry", Parameters: params}
+	b, _ := json.Marshal(req)
+	d.Handle(b)
+
+	items := batcher.added()
+	if len(items) != 1 {
+		t.Fatalf("batcher.Add called %d times, want 1", len(items))
+	}
+	if items[0].Kind != "report" {
+		t.Errorf("Kind = %q, want report", items[0].Kind)
+	}
+}

@@ -65,6 +65,9 @@ func TestDispatch_GmailTriage_Important_AddsToBatcher(t *testing.T) {
 	if len(items) != 1 {
 		t.Fatalf("batcher.Add called %d times, want 1", len(items))
 	}
+	if items[0].Kind != "gmail" {
+		t.Errorf("Kind = %q, want gmail", items[0].Kind)
+	}
 	if items[0].Sender != "boss@company.com" || items[0].Subject != "Server down" {
 		t.Errorf("batched item = %+v, want sender/subject to match", items[0])
 	}

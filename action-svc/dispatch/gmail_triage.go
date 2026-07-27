@@ -85,6 +85,7 @@ func (d *Dispatcher) dispatchGmailTriage(req common.ActionRequest) {
 
 	if p.Important && d.batcher != nil {
 		d.batcher.Add(notifybatch.Item{
+			Kind:        "gmail",
 			Sender:      p.Sender,
 			Subject:     p.Subject,
 			Reason:      p.Reason,
