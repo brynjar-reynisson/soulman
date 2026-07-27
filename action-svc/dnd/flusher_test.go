@@ -149,12 +149,24 @@ func TestFlushIfOutsideWindow_InsideWindow_DoesNotFlush(t *testing.T) {
 // text; a lost-message race would drop an entry entirely; either would be
 // caught by the accounting below. Run with `go test -race` for the
 // strongest signal — the Go race detector must also report nothing.
+//
+// The flush goroutines loop, repeatedly calling FlushIfPending until a
+// done channel (closed once every append has finished) tells them to stop
+// — not a single FlushIfPending call each. An early version of this test
+// had each flush goroutine call FlushIfPending exactly once, which
+// finishes fast and mostly races only the *first few* appends; measured
+// detection rate against the unfixed (pre-shared-lock) code was ~23%
+// (7/30 runs) — a single CI run had a ~77% chance of passing even with
+// the bug present. Looping the flushes for the appends' full duration
+// maximizes the overlap window and raises detection to near-certain (see
+// task-3-report.md for the actual before/after measurement).
 func TestConcurrentAppendAndFlush_NoLostMessagesNoTornReads(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "dnd-pending.txt")
 	window := Window{Start: "00:00", End: "10:00"}
 
-	real := &fakeNotifier{}
+	var realMu sync.Mutex // guards real.sent; real.Send is never expected to be hit in this test (window stays active throughout), but wrapping it costs nothing and removes any doubt.
+	real := &lockedNotifier{inner: &fakeFlushNotifier{}, mu: &realMu}
 	n := newNotifier(window, path, real, fixedInsideWindow)
 
 	flushNotifier := &fakeFlushNotifier{}
@@ -175,16 +187,33 @@ func TestConcurrentAppendAndFlush_NoLostMessagesNoTornReads(t *testing.T) {
 		}(i)
 	}
 
+	// done closes once every append has finished; each flush goroutine
+	// keeps calling FlushIfPending in a tight loop until then (plus one
+	// more pass after, to catch anything appended in the final stretch),
+	// so flushes and appends genuinely overlap for the whole burst instead
+	// of racing only briefly at the start.
+	done := make(chan struct{})
+	go func() {
+		appendWg.Wait()
+		close(done)
+	}()
+
 	var flushWg sync.WaitGroup
 	flushWg.Add(numFlushers)
 	for i := 0; i < numFlushers; i++ {
 		go func() {
 			defer flushWg.Done()
-			fl.FlushIfPending()
+			for {
+				fl.FlushIfPending()
+				select {
+				case <-done:
+					return
+				default:
+				}
+			}
 		}()
 	}
 
-	appendWg.Wait()
 	flushWg.Wait()
 
 	// Collect whatever's left after the race, plus everything the

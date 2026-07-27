@@ -20,16 +20,27 @@ import (
 const entrySeparator = "\n\n---\n\n"
 
 // pendingFileMu serializes all reads and writes of the do-not-disturb
-// pending file across goroutines: dndNotifier.append (below) writes to it
-// from whichever goroutine calls notify.Notifier.Send while the window is
-// active, and Flusher.FlushIfPending (flusher.go) reads-and-clears it from
-// its own background wake-loop goroutine. Without a shared lock, a flush
-// could race an in-progress append — reading a torn/partial write, or
-// clearing the file out from under a message that was appended between the
-// flush's read and its clear step, silently losing it. A single
-// package-level mutex (rather than a per-instance one on dndNotifier, or on
-// Flusher) is what makes the exclusion actually mutual: both types must
-// contend for the exact same lock instance around the exact same file.
+// pending file across goroutines, and also guards dndNotifier.Send's
+// window-active decision so that decision is atomic with respect to a
+// concurrent flush: dndNotifier.Send (below) re-checks window.Active and,
+// if active, appends, both under this lock; Flusher.FlushIfPending
+// (flusher.go) reads-and-clears the file under the same lock from its own
+// background wake-loop goroutine. Two distinct hazards motivate this
+// single shared, whole-decision critical section rather than a narrower
+// per-file-operation lock: (1) without any shared lock, a flush could race
+// an in-progress append — reading a torn/partial write, or clearing the
+// file out from under a message appended between the flush's read and its
+// clear step, silently losing it; (2) even with the file operations
+// individually locked, if Send's window.Active check happened *before*
+// acquiring the lock, a Send racing the window-end boundary could decide
+// "active" a moment too early, then block on the lock behind a flush's
+// critical section, and only append after the file was already cleared
+// for the day — stranding the message until tomorrow's flush instead of
+// either landing in the current flush or being sent immediately. A single
+// package-level mutex (rather than a per-instance one on dndNotifier, or
+// on Flusher) is what makes the exclusion actually mutual: both types must
+// contend for the exact same lock instance around the exact same file and
+// the exact same decision.
 var pendingFileMu sync.Mutex
 
 // dndNotifier wraps a real notify.Notifier so Send appends to a pending
@@ -59,24 +70,40 @@ func newNotifier(window Window, path string, real notify.Notifier, now func() ti
 	return &dndNotifier{window: window, path: path, real: real, now: now}
 }
 
+// Send decides whether to append to the pending file or delegate straight
+// through to real, then (if appending) does so — all under a single
+// pendingFileMu critical section. This is deliberate, not incidental: if
+// the window-active check happened before acquiring the lock (as an
+// earlier version of this code did), a Send racing the exact window-end
+// boundary could read Active() == true, then block on pendingFileMu behind
+// a concurrent Flusher.FlushIfPending's read-and-clear critical section,
+// and only get the lock after the file has already been cleared for this
+// window — appending a message that should have gone out with this flush
+// (or, since the window is now over, straight to real) into a file that
+// won't be read again until tomorrow. Re-deciding Active() only after
+// acquiring the lock (not before) closes that gap: the decision and the
+// write it leads to happen atomically with respect to a concurrent flush.
 func (n *dndNotifier) Send(message string) error {
-	if !n.window.Active(n.now()) {
+	pendingFileMu.Lock()
+	active := n.window.Active(n.now())
+	if !active {
+		pendingFileMu.Unlock()
 		return n.real.Send(message)
 	}
 
-	if err := n.append(message); err != nil {
+	err := n.appendLocked(message)
+	pendingFileMu.Unlock()
+	if err != nil {
 		slog.Warn("dnd: pending file append failed, sending immediately instead", "path", n.path, "error", err)
 		return n.real.Send(message)
 	}
 	return nil
 }
 
-// append writes message to the pending file, separating it from any
-// already-accumulated content with entrySeparator.
-func (n *dndNotifier) append(message string) error {
-	pendingFileMu.Lock()
-	defer pendingFileMu.Unlock()
-
+// appendLocked writes message to the pending file, separating it from any
+// already-accumulated content with entrySeparator. Callers must hold
+// pendingFileMu — this is not a standalone re-entrant helper.
+func (n *dndNotifier) appendLocked(message string) error {
 	if err := os.MkdirAll(filepath.Dir(n.path), 0o755); err != nil {
 		return fmt.Errorf("dnd: mkdir for %s: %w", n.path, err)
 	}
