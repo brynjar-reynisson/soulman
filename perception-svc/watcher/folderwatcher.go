@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"mime"
 	"os"
 	"path/filepath"
@@ -77,7 +77,7 @@ func New(paths []string, checkpoint *Checkpoint, publisher Publisher, reconcileI
 func (w *Watcher) Start(ctx context.Context) {
 	for _, p := range w.paths {
 		if err := w.fsw.Add(p); err != nil {
-			log.Printf("watcher: cannot watch %s (will retry via reconciliation): %v", p, err)
+			slog.Warn("watcher: cannot watch path, will retry via reconciliation", "path", p, "error", err)
 		}
 	}
 
@@ -105,13 +105,13 @@ func (w *Watcher) fsEventLoop(ctx context.Context) {
 			select {
 			case w.events <- ev:
 			default:
-				log.Printf("watcher: event queue full (%d), dropping create event for %s — reconciliation will catch it", maxQueuedEvents, ev.Name)
+				slog.Warn("watcher: event queue full, dropping create event — reconciliation will catch it", "queue_size", maxQueuedEvents, "file", ev.Name)
 			}
 		case err, ok := <-w.fsw.Errors:
 			if !ok {
 				return
 			}
-			log.Printf("watcher: fsnotify error: %v", err)
+			slog.Error("watcher: fsnotify error", "error", err)
 		}
 	}
 }
@@ -149,7 +149,7 @@ func (w *Watcher) reconcileAll(ctx context.Context) {
 	for _, dir := range w.paths {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			log.Printf("watcher: reconcile: cannot list %s (will retry next scan): %v", dir, err)
+			slog.Warn("watcher: reconcile cannot list directory, will retry next scan", "dir", dir, "error", err)
 			continue
 		}
 		for _, e := range entries {
@@ -166,7 +166,7 @@ func (w *Watcher) reconcileAll(ctx context.Context) {
 // checkpoint on success.
 func (w *Watcher) handleFile(ctx context.Context, dir, filename string) {
 	if isTempFilename(filename) {
-		log.Printf("watcher: skipping temp file %s", filepath.Join(dir, filename))
+		slog.Info("watcher: skipping temp file", "path", filepath.Join(dir, filename))
 		return
 	}
 
@@ -175,10 +175,10 @@ func (w *Watcher) handleFile(ctx context.Context, dir, filename string) {
 	info, err := os.Stat(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Printf("watcher: %s deleted before it could be read, skipping", fullPath)
+			slog.Info("watcher: file deleted before it could be read, skipping", "path", fullPath)
 			return
 		}
-		log.Printf("watcher: stat %s failed: %v", fullPath, err)
+		slog.Warn("watcher: stat failed", "path", fullPath, "error", err)
 		return
 	}
 	if info.IsDir() {
@@ -187,7 +187,7 @@ func (w *Watcher) handleFile(ctx context.Context, dir, filename string) {
 
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
-		log.Printf("watcher: read %s failed: %v", fullPath, err)
+		slog.Warn("watcher: read failed", "path", fullPath, "error", err)
 		return
 	}
 
@@ -199,7 +199,7 @@ func (w *Watcher) handleFile(ctx context.Context, dir, filename string) {
 	// stimulus that thinking-svc's error-report rule can't distinguish from
 	// a genuine binary attachment.
 	if len(data) == 0 {
-		log.Printf("watcher: %s read as empty, will retry", fullPath)
+		slog.Info("watcher: file read as empty, will retry", "path", fullPath)
 		return
 	}
 
@@ -212,7 +212,7 @@ func (w *Watcher) handleFile(ctx context.Context, dir, filename string) {
 	stimulus := buildStimulus(dir, filename, data, mtime)
 
 	if err := w.publisher.Publish(ctx, stimulus); err != nil {
-		log.Printf("watcher: publish failed for %s (checkpoint left unset, will retry): %v", fullPath, err)
+		slog.Error("watcher: publish failed, checkpoint left unset, will retry", "path", fullPath, "error", err)
 		return
 	}
 
@@ -222,7 +222,7 @@ func (w *Watcher) handleFile(ctx context.Context, dir, filename string) {
 		PublishedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 	if err := w.checkpoint.Mark(dir, filename, entry); err != nil {
-		log.Printf("watcher: checkpoint write failed for %s (may re-publish on restart): %v", fullPath, err)
+		slog.Warn("watcher: checkpoint write failed, may re-publish on restart", "path", fullPath, "error", err)
 	}
 }
 

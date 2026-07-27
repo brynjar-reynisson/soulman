@@ -2,7 +2,7 @@ package scheduler
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -97,11 +97,11 @@ func (s *Scheduler) RunOnce() {
 
 	content, err := report.Read(s.root, yesterday)
 	if err != nil {
-		log.Printf("scheduler: read report for %s failed, will retry tomorrow: %v", yesterday.Format("2006-01-02"), err)
+		slog.Error("scheduler: read report failed, will retry tomorrow", "date", yesterday.Format("2006-01-02"), "error", err)
 		return
 	}
 	if strings.TrimSpace(content) == "" {
-		log.Printf("scheduler: report for %s empty or missing, nothing to send", yesterday.Format("2006-01-02"))
+		slog.Info("scheduler: report empty or missing, nothing to send", "date", yesterday.Format("2006-01-02"))
 		return
 	}
 
@@ -112,7 +112,7 @@ func (s *Scheduler) RunOnce() {
 	case err != nil:
 		status = "failed"
 		summary = fmt.Sprintf("Daily report delivery failed: %v", err)
-		log.Printf("scheduler: notifier send failed after 3 attempts: %v", err)
+		slog.Error("scheduler: notifier send failed after 3 attempts", "error", err)
 	case s.gate.Enabled():
 		summary = "Daily report delivery feigned"
 	default:
@@ -133,7 +133,7 @@ func (s *Scheduler) RunOnce() {
 		Tags:       []string{"report", "cron"},
 	}
 	if pubErr := s.publisher.PublishOutcome(rec); pubErr != nil {
-		log.Printf("scheduler: outcome publish failed: %v", pubErr)
+		slog.Error("scheduler: outcome publish failed", "error", pubErr)
 	}
 }
 
@@ -145,7 +145,7 @@ func (s *Scheduler) sendWithRetry(content string) error {
 		if err == nil {
 			return nil
 		}
-		log.Printf("scheduler: notifier send attempt %d/3 failed: %v", attempt, err)
+		slog.Warn("scheduler: notifier send attempt failed", "attempt", attempt, "max_attempts", 3, "error", err)
 		if attempt < 3 {
 			time.Sleep(backoff)
 			backoff *= 2

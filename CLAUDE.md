@@ -81,6 +81,10 @@ Dev and prod share one local NATS server and one local Postgres instance. Each s
 - **`common`** — `Stimulus`, `ActionRequest`, and `OutcomeRecord` wire-format types (imported via `replace soulman/common => ../common` in each service's `go.mod`) plus the `sharedconfig` schema for `config/dev.json`/`config/prod.json`. Specs: `2026-07-17-common-module-design.md`, `2026-07-18-shared-config-design.md`, `2026-07-18-shared-config-nats-design.md`, `2026-07-18-memory-episodes-design.md`. Notes: `common/NOTES.md`.
 - **`cli`** — the `soulman` command-line tool: `soulman note "<text>"` / `soulman "<text>"` (the CLI push channel), `soulman inject <file>` and `soulman discord-history --limit N` (debugging tools). Specs: `2026-07-18-soulman-cli-design.md`, `2026-07-18-pipeline-debugging-tools-design.md`. Notes: `cli/NOTES.md`.
 
+### Logging (added 2026-07-27)
+
+All five services log via stdlib `log/slog` (no third-party dependency — Go 1.21+ ships it, and every service's `go.mod` already targets 1.25), not the plain `log` package. Three levels, applied uniformly: **`slog.Error`** — something's actually broken (DB/NATS connect or write failures, HTTP server errors, unparseable/undispatchable messages dropped, a retry that's exhausted and given up); **`slog.Warn`** — degraded-but-handled or self-healing (a fallback path taken, a retry about to happen, a missing/corrupt checkpoint starting fresh, an optional channel disabled for missing credentials); **`slog.Info`** — routine lifecycle (started, listening, shutting down). Startup failures that used to call `log.Fatalf` now call `slog.Error(...)` followed by an explicit `os.Exit(1)`, since `slog` has no fatal-and-exit helper. Each service sets this up independently (calls the `slog` package-level functions directly against the default handler) rather than sharing a `common/` logging helper, consistent with this repo's existing preference for small independent duplication over cross-module imports (see `action-svc/NOTES.md`). See each service's `NOTES.md` for what motivated this and any per-service classification calls.
+
 ## System Architecture (Four Modules)
 
 ```

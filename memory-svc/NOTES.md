@@ -13,3 +13,7 @@ Unlike the STIMULUS consumer (`natsconsumer.Consumer`), `MemoryWriteConsumer` do
 ## The episodes table isn't created by memory-svc
 
 Same as `raw_inputs`: `memory-svc` never runs its own DDL. The `episodes` table is applied by hand once per environment via `docs/superpowers/specs/sql/2026-07-18-episodes-table.sql`. As of this writing it's applied to `memory_dev` only — `memory_prod`'s schema doesn't exist yet at all (see root `CLAUDE.md`).
+
+## Leveled logging (log/slog, added 2026-07-27)
+
+All `log.Printf`/`log.Fatalf` call sites replaced with stdlib `log/slog` (`slog.Error`/`slog.Warn`/`slog.Info`) — no new dependency, Go 1.25 already ships it. Prompted by a 2.75GB `soulman-prod/logs/memory-svc-startup-err.log` that had silently accumulated undifferentiated retry noise from a genuine, ongoing Postgres outage with no way to grep signal from noise. `storage/writer.go`'s DB-insert failures and `natsconsumer/memory_write_consumer.go`'s episode-write failures — both symptoms of that outage — are now `slog.Error`; the "DB unavailable, written to file only" fallback path stays `slog.Warn`. Startup `log.Fatalf` calls became `slog.Error(...)` followed by an explicit `os.Exit(1)`, since slog has no Fatal-and-exit helper.

@@ -3,7 +3,7 @@ package watcher
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"sync"
 )
@@ -36,14 +36,14 @@ func LoadCheckpoint(path string) *Checkpoint {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Printf("checkpoint: read %s failed, starting empty: %v", path, err)
+			slog.Warn("checkpoint: read failed, starting empty", "path", path, "error", err)
 		}
 		return c
 	}
 
 	var data map[string]map[string]CheckpointEntry
 	if err := json.Unmarshal(b, &data); err != nil {
-		log.Printf("checkpoint: parse %s failed, starting empty: %v", path, err)
+		slog.Warn("checkpoint: parse failed, starting empty", "path", path, "error", err)
 		return c
 	}
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -73,13 +73,13 @@ func (c *Consumer) Start(ctx context.Context) error {
 	cc, err := cons.Consume(func(msg jetstream.Msg) {
 		var s common.Stimulus
 		if err := json.Unmarshal(msg.Data(), &s); err != nil {
-			log.Printf("nats: unparseable stimulus (subject %s), ACKing to skip: %v", msg.Subject(), err)
+			slog.Error("nats: unparseable stimulus, ACKing to skip", "subject", msg.Subject(), "error", err)
 			msg.Ack()
 			return
 		}
 
 		if err := c.handler.Handle(ctx, &s); err != nil {
-			log.Printf("nats: handling failed for %s, ACKing anyway (no redelivery for thinking.request): %v", s.StimulusID, err)
+			slog.Error("nats: handling failed, ACKing anyway (no redelivery for thinking.request)", "stimulus_id", s.StimulusID, "error", err)
 		}
 		msg.Ack()
 	})
@@ -88,7 +88,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 	}
 
 	c.cc = cc
-	log.Printf("nats: consuming STIMULUS stream as %q (subject %q)", c.consumerName, c.subject)
+	slog.Info("nats: consuming STIMULUS stream", "consumer_name", c.consumerName, "subject", c.subject)
 	return nil
 }
 

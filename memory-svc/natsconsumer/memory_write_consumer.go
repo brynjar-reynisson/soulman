@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -100,26 +100,26 @@ func (c *MemoryWriteConsumer) Start(ctx context.Context) error {
 
 		var rec common.OutcomeRecord
 		if err := json.Unmarshal(msg.Data(), &rec); err != nil {
-			log.Printf("nats: unparseable MEMORY_WRITE message (subject %s), ACKing to skip: %v", msg.Subject(), err)
+			slog.Error("nats: unparseable MEMORY_WRITE message, ACKing to skip", "subject", msg.Subject(), "error", err)
 			msg.Ack()
 			return
 		}
 
 		if rec.Type != "action_log" {
-			log.Printf("nats: MEMORY_WRITE message with unknown type %q, ACKing to skip", rec.Type)
+			slog.Error("nats: MEMORY_WRITE message with unknown type, ACKing to skip", "type", rec.Type)
 			msg.Ack()
 			return
 		}
 
 		meta, err := msg.Metadata()
 		if err != nil {
-			log.Printf("nats: MEMORY_WRITE message metadata unavailable, NAKing for redelivery in %s: %v", nakDelay, err)
+			slog.Error("nats: MEMORY_WRITE message metadata unavailable, NAKing for redelivery", "delay", nakDelay, "error", err)
 			msg.NakWithDelay(nakDelay)
 			return
 		}
 
 		if err := c.writer.WriteEpisode(context.Background(), meta.Sequence.Stream, &rec); err != nil {
-			log.Printf("nats: episode write failed (stream_seq %d), NAKing for redelivery in %s: %v", meta.Sequence.Stream, nakDelay, err)
+			slog.Error("nats: episode write failed, NAKing for redelivery", "stream_seq", meta.Sequence.Stream, "delay", nakDelay, "error", err)
 			msg.NakWithDelay(nakDelay)
 			return
 		}
@@ -131,7 +131,7 @@ func (c *MemoryWriteConsumer) Start(ctx context.Context) error {
 	}
 
 	c.cc = cc
-	log.Printf("nats: consuming MEMORY_WRITE stream as %q (subject %q)", c.consumerName, c.subject)
+	slog.Info("nats: consuming MEMORY_WRITE stream", "consumer_name", c.consumerName, "subject", c.subject)
 	return nil
 }
 

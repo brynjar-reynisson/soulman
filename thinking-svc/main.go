@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -42,14 +42,15 @@ func (h *stimulusHandler) Handle(ctx context.Context, s *common.Stimulus) error 
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		slog.Error("config load failed", "error", err)
+		os.Exit(1)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	if cfg.DeepSeekAPIKey == "" {
-		log.Printf("WARNING: DEEPSEEK_API_KEY not set — summarization calls will fail and fall back to deterministic summaries")
+		slog.Warn("DEEPSEEK_API_KEY not set — summarization calls will fail and fall back to deterministic summaries")
 	}
 	summarizer := llm.NewDeepSeekClient(
 		cfg.DeepSeekAPIKey,
@@ -60,7 +61,8 @@ func main() {
 
 	publisher, err := natsclient.NewPublisher(ctx, cfg.NATSURL, cfg.ThinkingRequestSubject)
 	if err != nil {
-		log.Fatalf("nats publisher: %v", err)
+		slog.Error("nats publisher init failed", "error", err)
+		os.Exit(1)
 	}
 	defer publisher.Close()
 
@@ -68,28 +70,29 @@ func main() {
 
 	consumer, err := natsclient.NewConsumer(cfg.NATSURL, cfg.ConsumerName, cfg.StimulusSubject, handler)
 	if err != nil {
-		log.Fatalf("nats consumer: %v", err)
+		slog.Error("nats consumer init failed", "error", err)
+		os.Exit(1)
 	}
 	defer consumer.Close()
 
 	if err := consumer.Start(ctx); err != nil {
-		log.Fatalf("nats consumer start: %v", err)
+		slog.Error("nats consumer start failed", "error", err)
+		os.Exit(1)
 	}
 
 	srv := httpserver.New(cfg.HTTPPort)
 	go func() {
-		log.Printf("HTTP listening on :%s", cfg.HTTPPort)
+		slog.Info("http listening", "port", cfg.HTTPPort)
 		if err := srv.Start(); err != nil {
-			log.Printf("http: %v", err)
+			slog.Error("http server failed", "error", err)
 		}
 	}()
 
-	log.Printf("thinking-svc started (NATS=%s, HTTP=:%s, DeepSeek model=%s)",
-		cfg.NATSURL, cfg.HTTPPort, cfg.DeepSeekModel)
+	slog.Info("thinking-svc started", "nats_url", cfg.NATSURL, "http_port", cfg.HTTPPort, "deepseek_model", cfg.DeepSeekModel)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Printf("thinking-svc shutting down")
+	slog.Info("thinking-svc shutting down")
 }

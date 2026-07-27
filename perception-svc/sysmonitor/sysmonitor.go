@@ -13,7 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"sort"
 	"sync"
 	"time"
@@ -250,7 +250,7 @@ func (w *Watcher) runCheck(ctx context.Context, c CheckConfig) {
 		if errors.Is(err, errNoCPUBaseline) {
 			return
 		}
-		log.Printf("sysmonitor: check %s failed, skipping this poll: %v", key, err)
+		slog.Warn("sysmonitor: check failed, skipping this poll", "check", key, "error", err)
 		return
 	}
 
@@ -282,7 +282,7 @@ func (w *Watcher) publishTransition(ctx context.Context, key string, sev severit
 		return
 	}
 	if err := w.publisher.Publish(ctx, build()); err != nil {
-		log.Printf("sysmonitor: publish failed for %s (state unchanged, will retry next poll): %v", key, err)
+		slog.Error("sysmonitor: publish failed, state unchanged, will retry next poll", "check", key, "error", err)
 		return
 	}
 	w.state[key] = sev

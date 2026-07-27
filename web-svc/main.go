@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,7 +14,8 @@ import (
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		slog.Error("config load failed", "error", err)
+		os.Exit(1)
 	}
 
 	verifier := auth.NewVerifier(cfg.SupabaseURL, cfg.SupabaseJWTSecret, cfg.OwnerEmail)
@@ -29,17 +30,17 @@ func main() {
 	}, verifier)
 
 	go func() {
-		log.Printf("HTTP listening on :%s", cfg.HTTPPort)
+		slog.Info("http listening", "port", cfg.HTTPPort)
 		if err := srv.Start(); err != nil {
-			log.Printf("http: %v", err)
+			slog.Error("http server failed", "error", err)
 		}
 	}()
 
-	log.Printf("web-svc started (HTTP=:%s, owner=%s)", cfg.HTTPPort, cfg.OwnerEmail)
+	slog.Info("web-svc started", "http_port", cfg.HTTPPort, "owner", cfg.OwnerEmail)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Printf("web-svc shutting down")
+	slog.Info("web-svc shutting down")
 }

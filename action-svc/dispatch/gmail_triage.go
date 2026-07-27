@@ -3,7 +3,7 @@ package dispatch
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"soulman/action-svc/notifybatch"
@@ -67,20 +67,20 @@ var AppendGmailReportEntry = func(root string, params json.RawMessage) (string, 
 func (d *Dispatcher) dispatchGmailTriage(req common.ActionRequest) {
 	var p GmailTriageParams
 	if err := json.Unmarshal(req.Parameters, &p); err != nil {
-		log.Printf("dispatch: triage_gmail_email unparseable params, dropping (correlation_id=%s): %v", req.CorrelationID, err)
+		slog.Error("dispatch: triage_gmail_email unparseable params, dropping", "correlation_id", req.CorrelationID, "error", err)
 		return
 	}
 
 	_, err := AppendGmailReportEntry(d.root, req.Parameters)
 	if err != nil {
-		log.Printf("dispatch: triage_gmail_email report append failed for task %s, retrying once: %v", req.CorrelationID, err)
+		slog.Warn("dispatch: triage_gmail_email report append failed, retrying once", "correlation_id", req.CorrelationID, "error", err)
 		_, err = AppendGmailReportEntry(d.root, req.Parameters)
 	}
 
 	status := "success"
 	if err != nil {
 		status = "failed"
-		log.Printf("dispatch: triage_gmail_email report append failed for task %s after retry, giving up: %v", req.CorrelationID, err)
+		slog.Error("dispatch: triage_gmail_email report append failed after retry, giving up", "correlation_id", req.CorrelationID, "error", err)
 	}
 
 	if p.Important && d.batcher != nil {
@@ -121,6 +121,6 @@ func (d *Dispatcher) dispatchGmailTriage(req common.ActionRequest) {
 		Tags:       []string{"gmail", "triage"},
 	}
 	if pubErr := d.publisher.PublishOutcome(rec); pubErr != nil {
-		log.Printf("dispatch: outcome publish failed for task %s: %v", req.CorrelationID, pubErr)
+		slog.Error("dispatch: outcome publish failed", "correlation_id", req.CorrelationID, "error", pubErr)
 	}
 }

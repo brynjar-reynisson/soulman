@@ -2,7 +2,7 @@ package dispatch
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"time"
 
 	"soulman/action-svc/feign"
@@ -42,7 +42,7 @@ func New(root string, publisher Publisher, batcher Batcher, gate *feign.Gate) *D
 func (d *Dispatcher) Handle(msg []byte) {
 	var req common.ActionRequest
 	if err := json.Unmarshal(msg, &req); err != nil {
-		log.Printf("dispatch: unparseable request, dropping: %v", err)
+		slog.Error("dispatch: unparseable request, dropping", "error", err)
 		return
 	}
 
@@ -52,21 +52,21 @@ func (d *Dispatcher) Handle(msg []byte) {
 	case "triage_gmail_email":
 		d.dispatchGmailTriage(req)
 	default:
-		log.Printf("dispatch: unknown action_hint %q, dropping (correlation_id=%s)", req.ActionHint, req.CorrelationID)
+		slog.Error("dispatch: unknown action_hint, dropping", "action_hint", req.ActionHint, "correlation_id", req.CorrelationID)
 	}
 }
 
 func (d *Dispatcher) dispatchAppendDailyReportEntry(req common.ActionRequest) {
 	_, err := AppendReportEntry(d.root, req.Parameters)
 	if err != nil {
-		log.Printf("dispatch: append_daily_report_entry failed for task %s, retrying once: %v", req.CorrelationID, err)
+		slog.Warn("dispatch: append_daily_report_entry failed, retrying once", "correlation_id", req.CorrelationID, "error", err)
 		_, err = AppendReportEntry(d.root, req.Parameters)
 	}
 
 	status := "success"
 	if err != nil {
 		status = "failed"
-		log.Printf("dispatch: append_daily_report_entry failed for task %s after retry, giving up: %v", req.CorrelationID, err)
+		slog.Error("dispatch: append_daily_report_entry failed after retry, giving up", "correlation_id", req.CorrelationID, "error", err)
 	}
 
 	if d.publisher == nil {
@@ -83,6 +83,6 @@ func (d *Dispatcher) dispatchAppendDailyReportEntry(req common.ActionRequest) {
 		Tags:       []string{"report"},
 	}
 	if pubErr := d.publisher.PublishOutcome(rec); pubErr != nil {
-		log.Printf("dispatch: outcome publish failed for task %s: %v", req.CorrelationID, pubErr)
+		slog.Error("dispatch: outcome publish failed", "correlation_id", req.CorrelationID, "error", pubErr)
 	}
 }
