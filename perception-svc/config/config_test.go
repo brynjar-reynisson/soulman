@@ -513,6 +513,56 @@ func TestLoad_ValidServiceHealthCheck_NoThresholdRequired(t *testing.T) {
 	}
 }
 
+func TestLoad_InternalHealthCheckMissingName_ReturnsError(t *testing.T) {
+	unsetAllEnv()
+	defer unsetAllEnv()
+
+	sysMon := validSystemMonitor
+	sysMon.Checks = []checkFields{{Type: "internal_health", Target: "http://localhost:9002/health"}}
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon, validLogMonitor)
+	os.Setenv("CONFIG_PATH", configPath)
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("Load: want error for internal_health check with no name, got nil")
+	}
+}
+
+func TestLoad_InternalHealthCheckMissingTarget_ReturnsError(t *testing.T) {
+	unsetAllEnv()
+	defer unsetAllEnv()
+
+	sysMon := validSystemMonitor
+	sysMon.Checks = []checkFields{{Type: "internal_health", Name: "memory-svc"}}
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon, validLogMonitor)
+	os.Setenv("CONFIG_PATH", configPath)
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("Load: want error for internal_health check with no target, got nil")
+	}
+}
+
+func TestLoad_ValidInternalHealthCheck_NoThresholdRequired(t *testing.T) {
+	unsetAllEnv()
+	defer unsetAllEnv()
+
+	sysMon := validSystemMonitor
+	sysMon.Checks = []checkFields{
+		{Type: "internal_health", Name: "memory-svc", Target: "http://localhost:9002/health"},
+	}
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon, validLogMonitor)
+	os.Setenv("CONFIG_PATH", configPath)
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load: want no error for a valid internal_health check without thresholds, got %v", err)
+	}
+	if len(cfg.SystemMonitorChecks) != 1 || cfg.SystemMonitorChecks[0].Target != "http://localhost:9002/health" {
+		t.Errorf("SystemMonitorChecks = %+v, want one internal_health check with target http://localhost:9002/health", cfg.SystemMonitorChecks)
+	}
+}
+
 func TestLoad_ZeroLogMonitorReconciliationInterval_ReturnsError(t *testing.T) {
 	unsetAllEnv()
 	defer unsetAllEnv()

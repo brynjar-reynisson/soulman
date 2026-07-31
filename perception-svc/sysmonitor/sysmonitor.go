@@ -86,11 +86,12 @@ type CheckStatus struct {
 // restart resets every check to "ok", so a still-bad condition re-fires
 // once more, an accepted tradeoff simpler than a persisted checkpoint.
 type Watcher struct {
-	checks    []CheckConfig
-	stats     statsProvider
-	health    healthChecker
-	publisher Publisher
-	interval  time.Duration
+	checks         []CheckConfig
+	stats          statsProvider
+	health         healthChecker
+	internalHealth internalHealthChecker
+	publisher      Publisher
+	interval       time.Duration
 
 	state map[string]severity
 
@@ -102,13 +103,14 @@ type Watcher struct {
 
 func newWatcher(stats statsProvider, health healthChecker, checks []CheckConfig, publisher Publisher, interval time.Duration) *Watcher {
 	return &Watcher{
-		checks:    checks,
-		stats:     stats,
-		health:    health,
-		publisher: publisher,
-		interval:  interval,
-		state:     map[string]severity{},
-		status:    map[string]CheckStatus{},
+		checks:         checks,
+		stats:          stats,
+		health:         health,
+		internalHealth: httpInternalHealthChecker{},
+		publisher:      publisher,
+		interval:       interval,
+		state:          map[string]severity{},
+		status:         map[string]CheckStatus{},
 	}
 }
 
@@ -179,6 +181,8 @@ func checkIdentifier(c CheckConfig) string {
 		return c.Path
 	case "service_health":
 		return c.Name
+	case "internal_health":
+		return c.Name
 	default:
 		return ""
 	}
@@ -245,6 +249,11 @@ func (w *Watcher) runCheck(ctx context.Context, c CheckConfig) {
 		return
 	}
 
+	if c.Type == "internal_health" {
+		w.runInternalHealthCheck(ctx, c)
+		return
+	}
+
 	value, err := w.measure(c)
 	if err != nil {
 		if errors.Is(err, errNoCPUBaseline) {
@@ -265,6 +274,60 @@ func (w *Watcher) runCheck(ctx context.Context, c CheckConfig) {
 	w.publishTransition(ctx, key, sev, func() *common.Stimulus {
 		return buildStimulus(c, value, sev)
 	})
+}
+
+// runInternalHealthCheck polls the target soulman service's own /health
+// and runs the top-level reachability plus each reported dependency
+// through the same edge-triggered publishTransition machinery every
+// other check type shares. An unreachable/unparseable endpoint is
+// reported once, under the check's own key (mirroring service_health);
+// a reachable endpoint's individual dependencies each get their own
+// independent transition state (key: "internal_health:<name>:<dep>") so
+// "memory-svc process is down" and "memory-svc is up but Postgres is
+// down" are never conflated. See
+// docs/superpowers/specs/2026-07-27-dependency-health-design.md.
+func (w *Watcher) runInternalHealthCheck(ctx context.Context, c CheckConfig) {
+	key := checkKey(c)
+
+	body, err := w.internalHealth.FetchHealth(c.Target, serviceHealthTimeout)
+	if err != nil {
+		detail := err.Error()
+		status := CheckStatus{Type: c.Type, Key: c.Name, Severity: string(severityCritical), Detail: detail, CheckedAt: time.Now().UTC()}
+		w.recordStatus(key, status)
+		w.publishTransition(ctx, key, severityCritical, func() *common.Stimulus {
+			return buildServiceHealthStimulus(c, severityCritical, detail)
+		})
+		return
+	}
+
+	okStatus := CheckStatus{Type: c.Type, Key: c.Name, Severity: string(severityOK), CheckedAt: time.Now().UTC()}
+	w.recordStatus(key, okStatus)
+	w.publishTransition(ctx, key, severityOK, func() *common.Stimulus {
+		return buildServiceHealthStimulus(c, severityOK, "")
+	})
+
+	depNames := make([]string, 0, len(body.Dependencies))
+	for name := range body.Dependencies {
+		depNames = append(depNames, name)
+	}
+	sort.Strings(depNames)
+
+	for _, depName := range depNames {
+		dep := body.Dependencies[depName]
+		depKey := key + ":" + depName
+		sev := severityOK
+		if dep.Status == "down" {
+			sev = severityCritical
+		}
+		depStatus := CheckStatus{Type: c.Type, Key: c.Name + ":" + depName, Severity: string(sev), CheckedAt: time.Now().UTC()}
+		if sev == severityCritical {
+			depStatus.Detail = dep.Detail
+		}
+		w.recordStatus(depKey, depStatus)
+		w.publishTransition(ctx, depKey, sev, func() *common.Stimulus {
+			return buildInternalHealthStimulus(c, depName, sev, dep.Detail)
+		})
+	}
 }
 
 // publishTransition holds the edge-triggered state machine every check
@@ -433,6 +496,49 @@ func buildServiceHealthStimulus(c CheckConfig, sev severity, detail string) *com
 	})
 
 	s := newSystemMonitorStimulus(now, c.Type, computeMessageID(c.Type, c.Name, sev, now), formatServiceHealthMessage(c, sev, detail), sev)
+	s.ChannelMeta.ChannelSpecific = specific
+	return s
+}
+
+// formatInternalHealthMessage mirrors formatServiceHealthMessage but for
+// one dependency reported by an internal_health check.
+func formatInternalHealthMessage(c CheckConfig, depName string, sev severity, detail string) string {
+	if sev == severityOK {
+		return fmt.Sprintf("%s: %s recovered", c.Name, depName)
+	}
+	truncated := detail
+	if len(truncated) > 200 {
+		truncated = truncated[:200]
+	}
+	return fmt.Sprintf("%s: %s unavailable: %s", c.Name, depName, truncated)
+}
+
+// buildInternalHealthStimulus mirrors buildServiceHealthStimulus but for
+// one dependency reported by an internal_health check's /health response.
+func buildInternalHealthStimulus(c CheckConfig, depName string, sev severity, detail string) *common.Stimulus {
+	now := time.Now().UTC()
+
+	errField := ""
+	if sev == severityCritical {
+		errField = detail
+	}
+
+	specific, _ := json.Marshal(struct {
+		CheckType  string `json:"check_type"`
+		Name       string `json:"name"`
+		Dependency string `json:"dependency"`
+		Severity   string `json:"severity"`
+		Error      string `json:"error,omitempty"`
+	}{
+		CheckType:  c.Type,
+		Name:       c.Name,
+		Dependency: depName,
+		Severity:   string(sev),
+		Error:      errField,
+	})
+
+	msgID := computeMessageID(c.Type, c.Name+":"+depName, sev, now)
+	s := newSystemMonitorStimulus(now, c.Type, msgID, formatInternalHealthMessage(c, depName, sev, detail), sev)
 	s.ChannelMeta.ChannelSpecific = specific
 	return s
 }

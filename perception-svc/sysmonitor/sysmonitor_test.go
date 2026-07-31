@@ -470,3 +470,142 @@ func TestStatus_SortedByKey(t *testing.T) {
 		t.Errorf("Status() not sorted: %q before %q", status[0].Key, status[1].Key)
 	}
 }
+
+type fakeInternalHealth struct {
+	mu     sync.Mutex
+	bodies map[string]*internalHealthBody
+	errs   map[string]error
+}
+
+func (f *fakeInternalHealth) FetchHealth(target string, timeout time.Duration) (*internalHealthBody, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err, ok := f.errs[target]; ok {
+		return nil, err
+	}
+	return f.bodies[target], nil
+}
+
+func (f *fakeInternalHealth) setBody(target string, body *internalHealthBody) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.bodies == nil {
+		f.bodies = map[string]*internalHealthBody{}
+	}
+	f.bodies[target] = body
+}
+
+func (f *fakeInternalHealth) setErr(target string, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.errs == nil {
+		f.errs = map[string]error{}
+	}
+	f.errs[target] = err
+}
+
+func internalHealthCheck(name, target string) CheckConfig {
+	return CheckConfig{Type: "internal_health", Name: name, Target: target}
+}
+
+func TestInternalHealth_Unreachable_PublishesCritical(t *testing.T) {
+	pub := &fakePublisher{}
+	internal := &fakeInternalHealth{}
+	internal.setErr("http://memory-svc/health", errors.New("connection refused"))
+
+	w := newWatcher(&fakeStats{}, nil, []CheckConfig{internalHealthCheck("memory-svc", "http://memory-svc/health")}, pub, time.Hour)
+	w.internalHealth = internal
+
+	w.poll(context.Background())
+
+	if pub.publishedCount() != 1 {
+		t.Fatalf("published = %d, want 1", pub.publishedCount())
+	}
+}
+
+func TestInternalHealth_DependencyDown_PublishesCritical(t *testing.T) {
+	pub := &fakePublisher{}
+	internal := &fakeInternalHealth{}
+	internal.setBody("http://memory-svc/health", &internalHealthBody{
+		Status:       "degraded",
+		Dependencies: map[string]internalHealthDependency{"postgres": {Status: "down", Detail: "connection refused"}},
+	})
+
+	w := newWatcher(&fakeStats{}, nil, []CheckConfig{internalHealthCheck("memory-svc", "http://memory-svc/health")}, pub, time.Hour)
+	w.internalHealth = internal
+
+	w.poll(context.Background())
+
+	// The reachable service-level baseline (first sighting, ok) is
+	// suppressed by publishTransition; only postgres going critical
+	// publishes.
+	if pub.publishedCount() != 1 {
+		t.Fatalf("published = %d, want 1", pub.publishedCount())
+	}
+}
+
+func TestInternalHealth_DependencyRecovers_PublishesRecovery(t *testing.T) {
+	pub := &fakePublisher{}
+	internal := &fakeInternalHealth{}
+	internal.setBody("http://memory-svc/health", &internalHealthBody{
+		Status:       "degraded",
+		Dependencies: map[string]internalHealthDependency{"postgres": {Status: "down", Detail: "connection refused"}},
+	})
+
+	w := newWatcher(&fakeStats{}, nil, []CheckConfig{internalHealthCheck("memory-svc", "http://memory-svc/health")}, pub, time.Hour)
+	w.internalHealth = internal
+
+	w.poll(context.Background()) // postgres down: 1 publish
+
+	internal.setBody("http://memory-svc/health", &internalHealthBody{
+		Status:       "ok",
+		Dependencies: map[string]internalHealthDependency{"postgres": {Status: "ok"}},
+	})
+	w.poll(context.Background()) // postgres recovers: 1 more publish
+
+	if pub.publishedCount() != 2 {
+		t.Fatalf("published = %d, want 2 (down + recovered)", pub.publishedCount())
+	}
+}
+
+func TestInternalHealth_SteadyState_NoRepeatPublish(t *testing.T) {
+	pub := &fakePublisher{}
+	internal := &fakeInternalHealth{}
+	internal.setBody("http://memory-svc/health", &internalHealthBody{
+		Status:       "degraded",
+		Dependencies: map[string]internalHealthDependency{"postgres": {Status: "down", Detail: "connection refused"}},
+	})
+
+	w := newWatcher(&fakeStats{}, nil, []CheckConfig{internalHealthCheck("memory-svc", "http://memory-svc/health")}, pub, time.Hour)
+	w.internalHealth = internal
+
+	w.poll(context.Background())
+	w.poll(context.Background())
+	w.poll(context.Background())
+
+	if pub.publishedCount() != 1 {
+		t.Fatalf("published = %d, want 1 (no repeat while steady)", pub.publishedCount())
+	}
+}
+
+func TestInternalHealth_ProcessUnreachable_And_DependencyDown_AreIndependentKeys(t *testing.T) {
+	pub := &fakePublisher{}
+	internal := &fakeInternalHealth{}
+	internal.setErr("http://memory-svc/health", errors.New("connection refused"))
+
+	w := newWatcher(&fakeStats{}, nil, []CheckConfig{internalHealthCheck("memory-svc", "http://memory-svc/health")}, pub, time.Hour)
+	w.internalHealth = internal
+
+	w.poll(context.Background()) // unreachable: 1 publish (key: internal_health:memory-svc)
+
+	internal.errs = nil
+	internal.setBody("http://memory-svc/health", &internalHealthBody{
+		Status:       "degraded",
+		Dependencies: map[string]internalHealthDependency{"postgres": {Status: "down", Detail: "still down"}},
+	})
+	w.poll(context.Background()) // now reachable (recovery publish) + postgres down (new key, first sighting critical, publishes)
+
+	if pub.publishedCount() != 3 {
+		t.Fatalf("published = %d, want 3 (unreachable, then process-recovered + postgres-down)", pub.publishedCount())
+	}
+}
