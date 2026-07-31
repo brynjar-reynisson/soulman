@@ -46,11 +46,11 @@ func main() {
 	defer dbHolder.Close()
 	// cancel() must run before dbHolder.Close() at shutdown so the
 	// Reconnector's background goroutine stops ticking before the DB pool
-	// it holds a reference to is closed — DBHolder.Close() does not nil
-	// out its internal *DB, so a Reconnector tick landing after Close()
-	// could Ping() or Close() an already-closed pool. Registering this
-	// defer here (after the dbHolder.Close() defer above) makes it run
-	// first under defer's LIFO order.
+	// it holds a reference to is closed — DBHolder.Close() nils out its
+	// internal *DB, so a Reconnector tick landing after Close() would see
+	// db == nil and open a brand-new pool that nothing will ever close.
+	// Registering this defer here (after the dbHolder.Close() defer
+	// above) makes it run first under defer's LIFO order.
 	defer cancel()
 
 	reconnector := storage.NewReconnector(dbHolder, registry, cfg.DatabaseURL, cfg.Schema)
