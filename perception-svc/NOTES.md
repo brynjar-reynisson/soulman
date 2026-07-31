@@ -50,3 +50,9 @@ All `log.Printf`/`log.Fatalf` call sites across `main.go`, `watcher`, `gmailwatc
 ## Known deferred issue
 
 Dev and prod share one Discord bot/channel/token for the "Soulman Reports" notifications — a real bug (every Gmail-triage Discord notification is sent twice, once per environment), deliberately not fixed yet. See `action-svc/NOTES.md`.
+
+## `internal_health` check type (added 2026-07-27)
+
+A fifth `system_monitor` check type, alongside `disk_space`/`memory`/`cpu`/`service_health`: polls a *soulman* service's own `GET /health` (currently only `memory-svc`, at `http://localhost:9002/health` prod / `:9012` dev) and parses its `dependencies` map (see `docs/superpowers/specs/2026-07-27-dependency-health-design.md`). Two failure modes are kept as independent transition keys so they're never conflated: the endpoint being unreachable at all (`internal_health:<name>`, reported exactly like `service_health`) versus a specific dependency inside a reachable service being down (`internal_health:<name>:<dependency>`, its own edge-triggered state). Both reuse the exact same `publishTransition` machinery `disk_space`/`memory`/`cpu`/`service_health` already share — no second dedup mechanism was built for this.
+
+This is the generic first instance of a pattern meant to extend to other dependencies later (action-svc's Discord webhook, perception-svc's own Gmail polling, NATS connectivity for any service) — each addition is: instrument that dependency with a `common/dephealth.Registry` call, surface it in that service's `/health`, and (if not already present) add one `internal_health` config entry for that service — one check polls a whole service's `/health` and gets all of its dependencies at once, so a second dependency on an already-checked service needs no new config entry.
