@@ -81,9 +81,9 @@ func (rc *Reconnector) tick(ctx context.Context) {
 	}
 
 	if err := db.Ping(ctx); err != nil {
-		db.Close()
 		rc.holder.set(nil)
 		rc.registry.Record("postgres", err)
 		slog.Error("storage: postgres ping failed, marked down", "error", err)
+		go db.Close() // may block until in-flight queries release their conns
 	}
 }
