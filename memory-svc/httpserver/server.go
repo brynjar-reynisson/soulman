@@ -2,22 +2,26 @@ package httpserver
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"soulman/common/dephealth"
 	"soulman/memory-svc/storage"
 )
 
 type Server struct {
-	db     *storage.DB
-	port   string
-	router chi.Router
+	db       *storage.DBHolder
+	registry *dephealth.Registry
+	port     string
+	router   chi.Router
 }
 
-func New(db *storage.DB, port string) *Server {
-	s := &Server{db: db, port: port}
+func New(db *storage.DBHolder, registry *dephealth.Registry, port string) *Server {
+	s := &Server{db: db, registry: registry, port: port}
 	s.router = s.buildRouter()
 	return s
 }
@@ -44,22 +48,25 @@ func (s *Server) buildRouter() chi.Router {
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
-	body := map[string]string{"status": "ok"}
-	if s.db == nil {
-		body["db"] = "unavailable"
-	} else {
-		body["db"] = "connected"
+	deps := s.registry.Snapshot()
+	status := "ok"
+	depsBody := make(map[string]map[string]any, len(deps))
+	for name, st := range deps {
+		entry := map[string]any{"status": st.State}
+		if st.State == "down" {
+			status = "degraded"
+			entry["since"] = st.Since.UTC().Format(time.RFC3339)
+			entry["detail"] = st.Detail
+		}
+		depsBody[name] = entry
 	}
+
+	body := map[string]any{"status": status, "dependencies": depsBody}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(body)
 }
 
 func (s *Server) rawInputsRecent(w http.ResponseWriter, r *http.Request) {
-	if s.db == nil {
-		http.Error(w, "database unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
 	limit := 20
 	if l := r.URL.Query().Get("limit"); l != "" {
 		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 100 {
@@ -68,6 +75,10 @@ func (s *Server) rawInputsRecent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := s.db.GetRecent(r.Context(), limit)
+	if errors.Is(err, storage.ErrNotConnected) {
+		http.Error(w, "database unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -81,11 +92,6 @@ func (s *Server) rawInputsRecent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) memoryEpisodes(w http.ResponseWriter, r *http.Request) {
-	if s.db == nil {
-		http.Error(w, "database unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
 	limit := 20
 	if l := r.URL.Query().Get("limit"); l != "" {
 		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 100 {
@@ -94,6 +100,10 @@ func (s *Server) memoryEpisodes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := s.db.GetRecentEpisodes(r.Context(), limit)
+	if errors.Is(err, storage.ErrNotConnected) {
+		http.Error(w, "database unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
