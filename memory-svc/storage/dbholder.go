@@ -5,6 +5,9 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"soulman/common"
 	"soulman/common/dephealth"
 )
@@ -58,11 +61,45 @@ func (h *DBHolder) set(db *DB) {
 	h.mu.Unlock()
 }
 
-// Close closes the currently held connection, if any.
+// Close closes the currently held connection, if any, and nils out the
+// held *DB so a subsequent Get() reports disconnected rather than
+// returning an already-closed pool. Previously this only left the pool
+// closed without clearing h.db — safe only because of main.go's
+// non-obvious defer ordering (Reconnector's context is cancelled before
+// Close() runs); any future caller that got that ordering wrong could
+// have Get() hand out a closed pool. Flagged during Task 2's review.
 func (h *DBHolder) Close() {
-	if db := h.Get(); db != nil {
+	h.mu.Lock()
+	db := h.db
+	h.db = nil
+	h.mu.Unlock()
+	if db != nil {
 		db.Close()
 	}
+}
+
+// recordDBOutcome records a real Postgres call's outcome into the
+// registry, distinguishing a connectivity failure from a query-level
+// error the database itself responded to. A *pgconn.PgError (or
+// pgx.ErrNoRows) proves the connection is reachable — Postgres received
+// the query and replied — so it is recorded as "ok" even though the
+// call itself failed; only errors that indicate the connection is
+// actually unreachable (network errors, a closed pool, a context
+// deadline on a hung connection) are recorded as "down". Without this
+// distinction, an isolated query-level error (e.g. a missing table)
+// would falsely latch the dependency "down" until an unrelated call
+// happened to succeed.
+func recordDBOutcome(registry *dephealth.Registry, name string, err error) {
+	if err == nil {
+		registry.Record(name, nil)
+		return
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) || errors.Is(err, pgx.ErrNoRows) {
+		registry.Record(name, nil)
+		return
+	}
+	registry.Record(name, err)
 }
 
 func (h *DBHolder) InsertRawInput(ctx context.Context, s *common.Stimulus) error {
@@ -71,7 +108,7 @@ func (h *DBHolder) InsertRawInput(ctx context.Context, s *common.Stimulus) error
 		return ErrNotConnected
 	}
 	err := db.InsertRawInput(ctx, s)
-	h.registry.Record("postgres", err)
+	recordDBOutcome(h.registry, "postgres", err)
 	return err
 }
 
@@ -81,7 +118,7 @@ func (h *DBHolder) GetRecent(ctx context.Context, limit int) ([]RawInput, error)
 		return nil, ErrNotConnected
 	}
 	rows, err := db.GetRecent(ctx, limit)
-	h.registry.Record("postgres", err)
+	recordDBOutcome(h.registry, "postgres", err)
 	return rows, err
 }
 
@@ -91,7 +128,7 @@ func (h *DBHolder) GetRecentEpisodes(ctx context.Context, limit int) ([]Episode,
 		return nil, ErrNotConnected
 	}
 	rows, err := db.GetRecentEpisodes(ctx, limit)
-	h.registry.Record("postgres", err)
+	recordDBOutcome(h.registry, "postgres", err)
 	return rows, err
 }
 
@@ -101,6 +138,6 @@ func (h *DBHolder) WriteEpisode(ctx context.Context, streamSeq uint64, rec *comm
 		return ErrNotConnected
 	}
 	err := db.WriteEpisode(ctx, streamSeq, rec)
-	h.registry.Record("postgres", err)
+	recordDBOutcome(h.registry, "postgres", err)
 	return err
 }

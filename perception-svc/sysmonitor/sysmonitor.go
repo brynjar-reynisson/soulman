@@ -1,9 +1,11 @@
 // Package sysmonitor implements perception-svc's System Monitor pull
-// channel: polls disk space, memory, CPU usage, and external service
-// health on a fixed interval and publishes a Stimulus only when a check's
-// severity changes — see
-// docs/superpowers/specs/2026-07-18-system-monitor-channel-design.md and
-// docs/superpowers/specs/2026-07-19-system-monitor-service-health-design.md.
+// channel: polls disk space, memory, CPU usage, external service health,
+// and another soulman service's own /health and its dependencies
+// (internal_health) on a fixed interval and publishes a Stimulus only
+// when a check's severity changes — see
+// docs/superpowers/specs/2026-07-18-system-monitor-channel-design.md,
+// docs/superpowers/specs/2026-07-19-system-monitor-service-health-design.md,
+// and docs/superpowers/specs/2026-07-27-dependency-health-design.md.
 package sysmonitor
 
 import (
@@ -74,10 +76,10 @@ const (
 // did the last poll see," not "did anything change."
 type CheckStatus struct {
 	Type         string    `json:"type"`
-	Key          string    `json:"key,omitempty"` // path (disk_space) or name (service_health); absent for memory/cpu
+	Key          string    `json:"key,omitempty"` // path (disk_space) or name (service_health/internal_health); absent for memory/cpu
 	Severity     string    `json:"severity"`
 	ValuePercent *float64  `json:"value_percent,omitempty"` // disk_space/memory/cpu only
-	Detail       string    `json:"detail,omitempty"`        // service_health only, set when severity is critical
+	Detail       string    `json:"detail,omitempty"`        // service_health/internal_health only, set when severity is critical
 	CheckedAt    time.Time `json:"checked_at"`
 }
 

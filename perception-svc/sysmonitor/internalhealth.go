@@ -19,7 +19,7 @@ type internalHealthDependency struct {
 
 // internalHealthBody mirrors a soulman service's /health response shape.
 type internalHealthBody struct {
-	Status       string                              `json:"status"`
+	Status       string                              `json:"status"` // parsed but intentionally unused: severity is derived per-dependency below, to avoid double-reporting
 	Dependencies map[string]internalHealthDependency `json:"dependencies"`
 }
 

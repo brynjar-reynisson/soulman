@@ -56,11 +56,23 @@ func (rc *Reconnector) Run(ctx context.Context) {
 	}
 }
 
+// tickTimeout bounds each tick's Postgres calls (newDB's connect+ping,
+// or Ping alone) so a black-holed host — packets silently dropped
+// rather than refused, the realistic outage class this feature exists
+// to catch — can't stall this goroutine for the OS-level TCP
+// connect/read timeout (potentially minutes). Reconnector.Run is a
+// single goroutine, so tick() blocking means no ticks fire for anyone
+// until it returns.
+const tickTimeout = 10 * time.Second
+
 func (rc *Reconnector) tick(ctx context.Context) {
+	tickCtx, cancel := context.WithTimeout(ctx, tickTimeout)
+	defer cancel()
+
 	db := rc.holder.Get()
 
 	if db == nil {
-		newDB, err := rc.newDB(ctx, rc.connStr, rc.schema)
+		newDB, err := rc.newDB(tickCtx, rc.connStr, rc.schema)
 		if err != nil {
 			// Deliberately not logged: this fires every interval for the
 			// entire duration of an outage, and undifferentiated retry
@@ -80,10 +92,12 @@ func (rc *Reconnector) tick(ctx context.Context) {
 		return
 	}
 
-	if err := db.Ping(ctx); err != nil {
+	if err := db.Ping(tickCtx); err != nil {
 		rc.holder.set(nil)
 		rc.registry.Record("postgres", err)
 		slog.Error("storage: postgres ping failed, marked down", "error", err)
 		go db.Close() // may block until in-flight queries release their conns
+		return
 	}
+	rc.registry.Record("postgres", nil)
 }

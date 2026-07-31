@@ -77,14 +77,17 @@ type SystemMonitorConfig struct {
 // is optional — a zero value means this check only ever reports ok/warning,
 // never critical. Perception module.md's own example config only gives
 // disk_space a critical threshold, leaving memory and cpu warning-only.
-// Name and Target are service_health-only: Target is polymorphic, detected
-// by prefix ("http://"/"https://" → HTTP GET; otherwise → "host:port" TCP
-// dial) — see docs/superpowers/specs/2026-07-19-system-monitor-service-health-design.md.
+// Name and Target are service_health/internal_health-only: Target is
+// polymorphic, detected by prefix ("http://"/"https://" → HTTP GET;
+// otherwise → "host:port" TCP dial) for service_health, or another
+// soulman service's /health URL for internal_health — see
+// docs/superpowers/specs/2026-07-19-system-monitor-service-health-design.md
+// and docs/superpowers/specs/2026-07-27-dependency-health-design.md.
 type CheckConfig struct {
-	Type                     string  `json:"type"` // "disk_space" | "memory" | "cpu" | "service_health"
+	Type                     string  `json:"type"` // "disk_space" | "memory" | "cpu" | "service_health" | "internal_health"
 	Path                     string  `json:"path,omitempty"`   // disk_space only
-	Name                     string  `json:"name,omitempty"`   // service_health only
-	Target                   string  `json:"target,omitempty"` // service_health only
+	Name                     string  `json:"name,omitempty"`   // service_health/internal_health only
+	Target                   string  `json:"target,omitempty"` // service_health/internal_health only
 	WarningThresholdPercent  float64 `json:"warning_threshold_percent,omitempty"`
 	CriticalThresholdPercent float64 `json:"critical_threshold_percent,omitempty"`
 }

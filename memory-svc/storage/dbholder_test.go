@@ -84,3 +84,14 @@ func TestDBHolder_Close_NilDB_DoesNotPanic(t *testing.T) {
 	h := storage.NewDBHolder(nil, dephealth.NewRegistry())
 	h.Close() // must not panic
 }
+
+func TestDBHolder_Close_ConnectedDB_GetReturnsNilAfter(t *testing.T) {
+	db := testDB(t) // skips if Postgres unavailable
+	h := storage.NewDBHolder(db, dephealth.NewRegistry())
+
+	h.Close()
+
+	if h.Get() != nil {
+		t.Error("Get() = non-nil after Close(), want nil")
+	}
+}
