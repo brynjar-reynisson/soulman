@@ -56,3 +56,54 @@ func writeObsidianError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusInternalServerError, "internal error")
 	}
 }
+
+type obsidianFileRequest struct {
+	Folder  string `json:"folder"`
+	File    string `json:"file"`
+	Content string `json:"content"`
+}
+
+func (s *Server) obsidianFilePut(w http.ResponseWriter, r *http.Request) {
+	var req obsidianFileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := obsidian.WriteFile(s.cfg.ObsidianRoot, req.Folder, req.File, req.Content); err != nil {
+		writeObsidianError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) obsidianFilePost(w http.ResponseWriter, r *http.Request) {
+	var req obsidianFileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := obsidian.CreateFile(s.cfg.ObsidianRoot, req.Folder, req.File, req.Content); err != nil {
+		writeObsidianError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+type obsidianRenameRequest struct {
+	Folder  string `json:"folder"`
+	File    string `json:"file"`
+	NewName string `json:"new_name"`
+}
+
+func (s *Server) obsidianFileRename(w http.ResponseWriter, r *http.Request) {
+	var req obsidianRenameRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := obsidian.RenameFile(s.cfg.ObsidianRoot, req.Folder, req.File, req.NewName); err != nil {
+		writeObsidianError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}

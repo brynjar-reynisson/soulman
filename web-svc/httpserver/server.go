@@ -58,7 +58,7 @@ func (s *Server) buildRouter() chi.Router {
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{s.cfg.CORSAllowedOrigin},
-		AllowedMethods: []string{"GET", "OPTIONS"},
+		AllowedMethods: []string{"GET", "POST", "PUT", "OPTIONS"},
 		AllowedHeaders: []string{"Authorization", "Content-Type"},
 		MaxAge:         300,
 	}))
@@ -76,6 +76,9 @@ func (s *Server) buildRouter() chi.Router {
 		r.Get("/api/obsidian/folders", s.obsidianFolders)
 		r.Get("/api/obsidian/files", s.obsidianFiles)
 		r.Get("/api/obsidian/file", s.obsidianFileGet)
+		r.Put("/api/obsidian/file", s.obsidianFilePut)
+		r.Post("/api/obsidian/file", s.obsidianFilePost)
+		r.Post("/api/obsidian/file/rename", s.obsidianFileRename)
 	})
 
 	return r
