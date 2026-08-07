@@ -4,8 +4,9 @@ import { getStatus, ApiError, type ServiceStatus } from './api';
 import { LoginScreen } from './components/LoginScreen';
 import { RestrictedScreen } from './components/RestrictedScreen';
 import { Dashboard } from './components/Dashboard';
+import { ObsidianPage } from './components/ObsidianPage';
 
-type ViewState = 'loading' | 'login' | 'restricted' | 'dashboard';
+type ViewState = 'loading' | 'login' | 'restricted' | 'dashboard' | 'obsidian';
 
 function App() {
   const { user, loading: authLoading, signIn, signOut } = useAuth();
@@ -43,8 +44,9 @@ function App() {
   if (view === 'loading') return <div className="p-8 text-center">Loading...</div>;
   if (view === 'login') return <LoginScreen onSignIn={signIn} />;
   if (view === 'restricted') return <RestrictedScreen onSignOut={signOut} />;
+  if (view === 'obsidian') return <ObsidianPage onBack={() => setView('dashboard')} />;
 
-  return <Dashboard initialStatus={status} onSignOut={signOut} />;
+  return <Dashboard initialStatus={status} onSignOut={signOut} onOpenObsidian={() => setView('obsidian')} />;
 }
 
 export default App;

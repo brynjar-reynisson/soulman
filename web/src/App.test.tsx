@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const mockUseAuth = vi.fn();
 vi.mock('./auth', () => ({
@@ -51,6 +52,27 @@ describe('App', () => {
     mockGetStatus.mockResolvedValue({ 'memory-svc': 'up' });
     const { default: App } = await import('./App');
     render(<App />);
+
+    expect(await screen.findByText(/soulman dashboard/i)).toBeInTheDocument();
+  });
+
+  it('switches to the obsidian page and back via the header links', async () => {
+    mockUseAuth.mockReturnValue({
+      user: { email: 'breynisson@gmail.com' },
+      loading: false,
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+    });
+    mockGetStatus.mockResolvedValue({ 'memory-svc': 'up' });
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await screen.findByText(/soulman dashboard/i);
+    await userEvent.click(screen.getByRole('button', { name: /obsidian/i }));
+
+    expect(await screen.findByRole('heading', { name: /obsidian/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText(/soulman/i));
 
     expect(await screen.findByText(/soulman dashboard/i)).toBeInTheDocument();
   });
