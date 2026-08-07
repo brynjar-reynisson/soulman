@@ -28,7 +28,7 @@ func ListFolders(root string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("obsidian: reading root %s: %w", root, err)
 	}
-	var folders []string
+	folders := []string{}
 	for _, e := range entries {
 		if e.IsDir() {
 			folders = append(folders, e.Name())
@@ -52,7 +52,7 @@ func ListFiles(root, folder string) ([]string, error) {
 		}
 		return nil, fmt.Errorf("obsidian: reading folder %s: %w", dir, err)
 	}
-	var files []string
+	files := []string{}
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -71,9 +71,15 @@ func hasValidExtension(name string) bool {
 }
 
 // validSegment rejects anything that isn't a single, plain path component:
-// empty, containing a path separator, or "." / "..".
+// empty, containing a path separator, "." / "..", or (via filepath.IsLocal)
+// anything else that could escape the current directory when joined — most
+// notably a ":" on Windows/NTFS, which without this check would silently
+// write to an alternate data stream (e.g. "12:30 notes.md" becomes base
+// file "12" plus a hidden stream ":30 notes.md") instead of creating the
+// file the user asked for. IsLocal is a no-op guard on non-Windows, where a
+// colon is a legal filename character.
 func validSegment(name string) bool {
-	return name != "" && !strings.ContainsAny(name, `/\`) && name != "." && name != ".."
+	return name != "" && !strings.ContainsAny(name, `/\`) && name != "." && name != ".." && filepath.IsLocal(name)
 }
 
 // resolveFolder validates folder and returns root/folder, after confirming

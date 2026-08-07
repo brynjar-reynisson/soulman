@@ -1,6 +1,7 @@
 package obsidian_test
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -61,6 +62,50 @@ func TestListFiles_InvalidFolderName_ReturnsErrInvalidName(t *testing.T) {
 		if !errors.Is(err, obsidian.ErrInvalidName) {
 			t.Errorf("ListFiles(%q) error = %v, want ErrInvalidName", folder, err)
 		}
+	}
+}
+
+func TestListFiles_EmptyFolder_SerializesAsEmptyArrayNotNull(t *testing.T) {
+	root := t.TempDir()
+	os.Mkdir(filepath.Join(root, "vault"), 0o755)
+
+	files, err := obsidian.ListFiles(root, "vault")
+	if err != nil {
+		t.Fatalf("ListFiles() error = %v", err)
+	}
+	if files == nil {
+		t.Fatalf("ListFiles() returned nil slice, want non-nil empty slice")
+	}
+	if len(files) != 0 {
+		t.Fatalf("ListFiles() = %v, want empty", files)
+	}
+
+	b, err := json.Marshal(files)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	if string(b) != "[]" {
+		t.Errorf("json.Marshal(ListFiles(...)) = %s, want []  (a nil slice would marshal to null, leaving the frontend stuck on \"Loading...\" forever)", b)
+	}
+}
+
+func TestListFolders_EmptyRoot_SerializesAsEmptyArrayNotNull(t *testing.T) {
+	root := t.TempDir()
+
+	folders, err := obsidian.ListFolders(root)
+	if err != nil {
+		t.Fatalf("ListFolders() error = %v", err)
+	}
+	if folders == nil {
+		t.Fatalf("ListFolders() returned nil slice, want non-nil empty slice")
+	}
+
+	b, err := json.Marshal(folders)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	if string(b) != "[]" {
+		t.Errorf("json.Marshal(ListFolders(...)) = %s, want []", b)
 	}
 }
 
@@ -156,6 +201,32 @@ func TestCreateFile_AlreadyExists_ReturnsErrExists(t *testing.T) {
 	b, _ := os.ReadFile(filepath.Join(folder, "existing.md"))
 	if string(b) != "old" {
 		t.Errorf("existing file was overwritten: %q", string(b))
+	}
+}
+
+func TestCreateFile_NameContainsColon_ReturnsErrInvalidName(t *testing.T) {
+	root := t.TempDir()
+	folder := filepath.Join(root, "vault")
+	os.Mkdir(folder, 0o755)
+
+	// On Windows/NTFS a colon in a filename addresses an alternate data
+	// stream instead of creating a new base file — "2026-08-07 12:30
+	// notes.md" would silently write into a hidden stream of a "12" file
+	// rather than creating the note the user asked for. This must be
+	// rejected up front rather than accepted and lost.
+	for _, file := range []string{"2026-08-07 12:30 notes.md", "C:drive.md", "a:b.md"} {
+		err := obsidian.CreateFile(root, "vault", file, "content")
+		if !errors.Is(err, obsidian.ErrInvalidName) {
+			t.Errorf("CreateFile(%q) error = %v, want ErrInvalidName", file, err)
+		}
+	}
+
+	entries, err := os.ReadDir(folder)
+	if err != nil {
+		t.Fatalf("ReadDir() error = %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("expected no files to have been created, found %v", entries)
 	}
 }
 
