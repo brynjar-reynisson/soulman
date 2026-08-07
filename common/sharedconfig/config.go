@@ -130,6 +130,7 @@ type WebConfig struct {
 	MemorySvcURL      string `json:"memory_svc_url"`
 	ThinkingSvcURL    string `json:"thinking_svc_url"`
 	ActionSvcURL      string `json:"action_svc_url"`
+	ObsidianRoot      string `json:"obsidian_root"`
 }
 
 // Load reads and parses the JSON config file at path. An empty or missing

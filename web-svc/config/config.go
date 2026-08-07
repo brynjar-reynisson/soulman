@@ -18,6 +18,7 @@ type Config struct {
 	ThinkingSvcURL    string
 	ActionSvcURL      string
 	SoulmanRoot       string
+	ObsidianRoot      string
 }
 
 func Load() (*Config, error) {
@@ -45,6 +46,9 @@ func Load() (*Config, error) {
 	if shared.Web.ActionSvcURL == "" {
 		return nil, fmt.Errorf("shared config %s has no web.action_svc_url configured", configPath)
 	}
+	if shared.Web.ObsidianRoot == "" {
+		return nil, fmt.Errorf("shared config %s has no web.obsidian_root configured", configPath)
+	}
 
 	supabaseURL := os.Getenv("SUPABASE_URL")
 	if supabaseURL == "" {
@@ -69,6 +73,7 @@ func Load() (*Config, error) {
 		ThinkingSvcURL:    shared.Web.ThinkingSvcURL,
 		ActionSvcURL:      shared.Web.ActionSvcURL,
 		SoulmanRoot:       env("SOULMAN_ROOT", `C:\Users\Lenovo\soulman-dev`),
+		ObsidianRoot:      shared.Web.ObsidianRoot,
 	}, nil
 }
 
