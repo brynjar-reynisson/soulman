@@ -67,6 +67,51 @@ describe('ObsidianFileList create', () => {
     expect(screen.getByRole('button', { name: 'new.md' })).toBeInTheDocument();
   });
 
+  it('opens a newly created file directly in edit mode, not view mode', async () => {
+    mockGetObsidianFiles.mockResolvedValueOnce({ files: [] }).mockResolvedValueOnce({ files: ['new.md'] });
+    mockCreateObsidianFile.mockResolvedValue(undefined);
+    mockGetObsidianFile.mockResolvedValue({ content: '' });
+    const { ObsidianFileList } = await import('./ObsidianFileList');
+    render(<ObsidianFileList folder="soulman" />);
+
+    await userEvent.click(await screen.findByText(/new file/i));
+    await userEvent.type(screen.getByPlaceholderText('filename.md'), 'new.md');
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+    // The editor's textarea should appear directly — no intermediate empty
+    // view step requiring a manual click on the edit (pen) icon.
+    expect(await screen.findByRole('textbox')).toBeInTheDocument();
+    expect(screen.queryByTitle('Edit')).not.toBeInTheDocument();
+  });
+
+  it('reopens a previously-created file in view mode after selecting a different file first', async () => {
+    mockGetObsidianFiles
+      .mockResolvedValueOnce({ files: ['other.md'] })
+      .mockResolvedValueOnce({ files: ['new.md', 'other.md'] });
+    mockCreateObsidianFile.mockResolvedValue(undefined);
+    mockGetObsidianFile.mockImplementation((_token: string, _folder: string, file: string) =>
+      Promise.resolve({ content: file === 'new.md' ? '' : 'other content' }),
+    );
+    const { ObsidianFileList } = await import('./ObsidianFileList');
+    render(<ObsidianFileList folder="soulman" />);
+
+    await userEvent.click(await screen.findByText(/new file/i));
+    await userEvent.type(screen.getByPlaceholderText('filename.md'), 'new.md');
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+    // Auto-opened in edit mode right after creation.
+    expect(await screen.findByRole('textbox')).toBeInTheDocument();
+
+    // Select a different file, then come back to the created one — this
+    // second visit should render the normal view, not re-trigger edit mode.
+    await userEvent.click(screen.getByRole('button', { name: 'other.md' }));
+    await screen.findByText('other content');
+    await userEvent.click(screen.getByRole('button', { name: 'new.md' }));
+
+    await screen.findByRole('heading', { name: 'new.md' });
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
   it('shows an error when create fails', async () => {
     mockGetObsidianFiles.mockResolvedValue({ files: [] });
     mockCreateObsidianFile.mockRejectedValue(new Error('conflict'));

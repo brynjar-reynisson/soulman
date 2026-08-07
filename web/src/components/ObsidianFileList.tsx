@@ -7,17 +7,23 @@ export function ObsidianFileList({ folder }: { folder: string }) {
   const [files, setFiles] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  // Tracks the filename of a file just created via handleCreate, so the
+  // viewer below can be told to open it directly in edit mode instead of
+  // an empty view step. Cleared as soon as the user makes any other
+  // explicit selection, so it never re-applies on a later click.
+  const [justCreated, setJustCreated] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     setFiles(null);
     setError(null);
     setSelected(null);
+    setJustCreated(null);
     (async () => {
       const token = await getAccessToken();
       try {
         const data = await getObsidianFiles(token, folder);
-        if (active) setFiles(data.files);
+        if (active) setFiles(data.files ?? []);
       } catch {
         if (active) setError('Files unavailable');
       }
@@ -37,8 +43,9 @@ export function ObsidianFileList({ folder }: { folder: string }) {
     try {
       await createObsidianFile(token, folder, newFileName, '');
       const data = await getObsidianFiles(token, folder);
-      setFiles(data.files);
+      setFiles(data.files ?? []);
       setSelected(newFileName);
+      setJustCreated(newFileName);
       setCreating(false);
       setNewFileName('');
     } catch {
@@ -56,8 +63,9 @@ export function ObsidianFileList({ folder }: { folder: string }) {
     try {
       await renameObsidianFile(token, folder, oldName, renameValue);
       const data = await getObsidianFiles(token, folder);
-      setFiles(data.files);
+      setFiles(data.files ?? []);
       if (selected === oldName) setSelected(renameValue);
+      if (justCreated === oldName) setJustCreated(null);
       setRenamingFile(null);
     } catch {
       setRenameError('Could not rename file');
@@ -90,7 +98,10 @@ export function ObsidianFileList({ folder }: { folder: string }) {
               ) : (
                 <>
                   <button
-                    onClick={() => setSelected(f)}
+                    onClick={() => {
+                      if (justCreated !== f) setJustCreated(null);
+                      setSelected(f);
+                    }}
                     className={`text-sm underline ${selected === f ? 'font-semibold' : ''}`}
                   >
                     {f}
@@ -114,7 +125,11 @@ export function ObsidianFileList({ folder }: { folder: string }) {
       )}
       {selected && (
         <div className="mt-2">
-          <ObsidianFileViewer folder={folder} file={selected} />
+          <ObsidianFileViewer
+            folder={folder}
+            file={selected}
+            initialMode={selected === justCreated ? 'edit' : 'view'}
+          />
         </div>
       )}
       {creating ? (

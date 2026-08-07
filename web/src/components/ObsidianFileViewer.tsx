@@ -4,16 +4,24 @@ import { getAccessToken } from '../auth';
 import { getObsidianFile } from '../api';
 import { ObsidianFileEditor } from './ObsidianFileEditor';
 
-export function ObsidianFileViewer({ folder, file }: { folder: string; file: string }) {
+export function ObsidianFileViewer({
+  folder,
+  file,
+  initialMode = 'view',
+}: {
+  folder: string;
+  file: string;
+  initialMode?: 'view' | 'edit';
+}) {
   const [content, setContent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<'view' | 'edit'>('view');
+  const [mode, setMode] = useState<'view' | 'edit'>(initialMode);
 
   useEffect(() => {
     let active = true;
     setContent(null);
     setError(null);
-    setMode('view');
+    setMode(initialMode);
     (async () => {
       const token = await getAccessToken();
       try {
@@ -26,7 +34,7 @@ export function ObsidianFileViewer({ folder, file }: { folder: string; file: str
     return () => {
       active = false;
     };
-  }, [folder, file]);
+  }, [folder, file, initialMode]);
 
   if (mode === 'edit' && content !== null) {
     return (

@@ -14,7 +14,7 @@ export function ObsidianFolderList() {
       const token = await getAccessToken();
       try {
         const data = await getObsidianFolders(token);
-        if (active) setFolders(data.folders);
+        if (active) setFolders(data.folders ?? []);
       } catch {
         if (active) setError('Folders unavailable');
       }

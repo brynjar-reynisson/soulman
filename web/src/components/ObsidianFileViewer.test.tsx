@@ -56,4 +56,22 @@ describe('ObsidianFileViewer', () => {
 
     expect(await screen.findByText('hello')).toBeInTheDocument();
   });
+
+  it('opens directly in edit mode when initialMode="edit" is passed', async () => {
+    mockGetObsidianFile.mockResolvedValue({ content: '' });
+    const { ObsidianFileViewer } = await import('./ObsidianFileViewer');
+    render(<ObsidianFileViewer folder="soulman" file="scratch.md" initialMode="edit" />);
+
+    expect(await screen.findByRole('textbox')).toBeInTheDocument();
+    expect(screen.queryByTitle('Edit')).not.toBeInTheDocument();
+  });
+
+  it('defaults to view mode when initialMode is omitted', async () => {
+    mockGetObsidianFile.mockResolvedValue({ content: 'hello' });
+    const { ObsidianFileViewer } = await import('./ObsidianFileViewer');
+    render(<ObsidianFileViewer folder="soulman" file="todo.txt" />);
+
+    await screen.findByText('hello');
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
 });
