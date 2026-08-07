@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { getAccessToken } from '../auth';
 import { getObsidianFile } from '../api';
 import { ObsidianFileEditor } from './ObsidianFileEditor';
@@ -68,8 +69,8 @@ export function ObsidianFileViewer({
       {error && <p className="text-sm text-red-600">{error}</p>}
       {!error && content === null && <p className="text-sm text-gray-500">Loading...</p>}
       {!error && content !== null && isMarkdown && (
-        <div className="text-sm">
-          <ReactMarkdown>{content}</ReactMarkdown>
+        <div className="prose prose-sm max-w-none">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
         </div>
       )}
       {!error && content !== null && !isMarkdown && (
