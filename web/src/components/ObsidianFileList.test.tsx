@@ -7,6 +7,7 @@ vi.mock('../auth', () => ({ getAccessToken: vi.fn().mockResolvedValue('tok-abc')
 const mockGetObsidianFiles = vi.fn();
 const mockGetObsidianFile = vi.fn();
 const mockCreateObsidianFile = vi.fn();
+const mockRenameObsidianFile = vi.fn();
 vi.mock('../api', async () => {
   const actual = await vi.importActual<typeof import('../api')>('../api');
   return {
@@ -14,6 +15,7 @@ vi.mock('../api', async () => {
     getObsidianFiles: (...args: unknown[]) => mockGetObsidianFiles(...args),
     getObsidianFile: (...args: unknown[]) => mockGetObsidianFile(...args),
     createObsidianFile: (...args: unknown[]) => mockCreateObsidianFile(...args),
+    renameObsidianFile: (...args: unknown[]) => mockRenameObsidianFile(...args),
   };
 });
 
@@ -76,5 +78,35 @@ describe('ObsidianFileList create', () => {
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }));
 
     expect(await screen.findByText(/could not create file/i)).toBeInTheDocument();
+  });
+});
+
+describe('ObsidianFileList rename', () => {
+  it('renames a file', async () => {
+    mockGetObsidianFiles.mockResolvedValueOnce({ files: ['old.md'] }).mockResolvedValueOnce({ files: ['new.md'] });
+    mockRenameObsidianFile.mockResolvedValue(undefined);
+    const { ObsidianFileList } = await import('./ObsidianFileList');
+    render(<ObsidianFileList folder="soulman" />);
+
+    await userEvent.click(await screen.findByLabelText('Rename old.md'));
+    const input = screen.getByDisplayValue('old.md');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'new.md');
+    await userEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
+    expect(mockRenameObsidianFile).toHaveBeenCalledWith('tok-abc', 'soulman', 'old.md', 'new.md');
+    expect(await screen.findByText('new.md')).toBeInTheDocument();
+  });
+
+  it('shows an error when rename fails', async () => {
+    mockGetObsidianFiles.mockResolvedValue({ files: ['old.md'] });
+    mockRenameObsidianFile.mockRejectedValue(new Error('conflict'));
+    const { ObsidianFileList } = await import('./ObsidianFileList');
+    render(<ObsidianFileList folder="soulman" />);
+
+    await userEvent.click(await screen.findByLabelText('Rename old.md'));
+    await userEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
+    expect(await screen.findByText(/could not rename file/i)).toBeInTheDocument();
   });
 });
