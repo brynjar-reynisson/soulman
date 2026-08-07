@@ -27,6 +27,7 @@ func main() {
 		ThinkingSvcURL:    cfg.ThinkingSvcURL,
 		ActionSvcURL:      cfg.ActionSvcURL,
 		ReportsRoot:       cfg.SoulmanRoot,
+		ObsidianRoot:      cfg.ObsidianRoot,
 	}, verifier)
 
 	go func() {

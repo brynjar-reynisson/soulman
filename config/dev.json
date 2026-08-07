@@ -41,6 +41,7 @@
     "perception_svc_url": "http://localhost:9011",
     "memory_svc_url": "http://localhost:9012",
     "thinking_svc_url": "http://localhost:9013",
-    "action_svc_url": "http://localhost:9014"
+    "action_svc_url": "http://localhost:9014",
+    "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian"
   }
 }
