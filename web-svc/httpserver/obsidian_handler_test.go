@@ -270,3 +270,22 @@ func TestAPIObsidianFileRename_DestinationExists_Returns409(t *testing.T) {
 		t.Fatalf("status = %d, want 409", rec.Code)
 	}
 }
+
+func TestAPIObsidianFileRename_SourceMissing_Returns404(t *testing.T) {
+	root := t.TempDir()
+	os.Mkdir(filepath.Join(root, "vault"), 0o755)
+
+	cfg := httpserver.Config{CORSAllowedOrigin: "http://localhost:5178", ObsidianRoot: root}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	reqBody, _ := json.Marshal(map[string]string{"folder": "vault", "file": "missing.md", "new_name": "new.md"})
+	req := httptest.NewRequest(http.MethodPost, "/api/obsidian/file/rename", bytes.NewReader(reqBody))
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}
