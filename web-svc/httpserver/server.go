@@ -24,6 +24,7 @@ type Config struct {
 	ThinkingSvcURL    string
 	ActionSvcURL      string
 	ReportsRoot       string
+	ObsidianRoot      string
 }
 
 type Server struct {
@@ -72,6 +73,9 @@ func (s *Server) buildRouter() chi.Router {
 		r.Get("/api/system-monitor", s.proxyGet(s.cfg.PerceptionSvcURL, "/api/system-monitor/status"))
 		r.Get("/api/reports/latest", s.reportsLatest)
 		r.Get("/api/reports", s.reportsByDate)
+		r.Get("/api/obsidian/folders", s.obsidianFolders)
+		r.Get("/api/obsidian/files", s.obsidianFiles)
+		r.Get("/api/obsidian/file", s.obsidianFileGet)
 	})
 
 	return r
