@@ -41,6 +41,7 @@ describe('ObsidianFolderList', () => {
     await userEvent.click(screen.getByText('brynjar-obsidian'));
 
     expect(await screen.findByText('diary.md')).toBeInTheDocument();
+    expect(screen.queryByText('NOTES.md')).not.toBeInTheDocument();
     expect(mockGetObsidianFiles).toHaveBeenCalledTimes(2);
   });
 
