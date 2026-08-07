@@ -76,3 +76,69 @@ export const getReportByDate = (token: string | null, date: string): Promise<Rep
 
 export const getSystemMonitorStatus = (token: string | null): Promise<CheckStatus[]> =>
   getJSON('/api/system-monitor', token);
+
+export interface ObsidianFolders {
+  folders: string[];
+}
+
+export interface ObsidianFiles {
+  files: string[];
+}
+
+export interface ObsidianFileContent {
+  content: string;
+}
+
+async function mutateJSON(
+  method: 'POST' | 'PUT',
+  path: string,
+  token: string | null,
+  body: unknown,
+): Promise<void> {
+  const response = await fetch(path, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, `${path} failed (${response.status})`);
+  }
+}
+
+export const getObsidianFolders = (token: string | null): Promise<ObsidianFolders> =>
+  getJSON('/api/obsidian/folders', token);
+
+export const getObsidianFiles = (token: string | null, folder: string): Promise<ObsidianFiles> =>
+  getJSON(`/api/obsidian/files?folder=${encodeURIComponent(folder)}`, token);
+
+export const getObsidianFile = (
+  token: string | null,
+  folder: string,
+  file: string,
+): Promise<ObsidianFileContent> =>
+  getJSON(`/api/obsidian/file?folder=${encodeURIComponent(folder)}&file=${encodeURIComponent(file)}`, token);
+
+export const saveObsidianFile = (
+  token: string | null,
+  folder: string,
+  file: string,
+  content: string,
+): Promise<void> => mutateJSON('PUT', '/api/obsidian/file', token, { folder, file, content });
+
+export const createObsidianFile = (
+  token: string | null,
+  folder: string,
+  file: string,
+  content: string,
+): Promise<void> => mutateJSON('POST', '/api/obsidian/file', token, { folder, file, content });
+
+export const renameObsidianFile = (
+  token: string | null,
+  folder: string,
+  file: string,
+  newName: string,
+): Promise<void> =>
+  mutateJSON('POST', '/api/obsidian/file/rename', token, { folder, file, new_name: newName });

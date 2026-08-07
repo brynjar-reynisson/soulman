@@ -1,5 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getStatus, getEpisodes, getRawInputs, getLatestReport, getReportByDate, ApiError } from './api';
+import {
+  getStatus,
+  getEpisodes,
+  getRawInputs,
+  getLatestReport,
+  getReportByDate,
+  getObsidianFolders,
+  getObsidianFiles,
+  getObsidianFile,
+  saveObsidianFile,
+  createObsidianFile,
+  renameObsidianFile,
+  ApiError,
+} from './api';
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn());
@@ -88,5 +101,94 @@ describe('getReportByDate', () => {
 
     const [url] = mockFetch.mock.calls[0];
     expect(url).toContain('date=2026-06-01');
+  });
+});
+
+describe('getObsidianFolders', () => {
+  it('calls the obsidian/folders endpoint', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ folders: ['soulman'] }) });
+
+    const result = await getObsidianFolders('tok-abc');
+
+    expect(result.folders).toEqual(['soulman']);
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toContain('/api/obsidian/folders');
+  });
+});
+
+describe('getObsidianFiles', () => {
+  it('passes the folder query param', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ files: [] }) });
+
+    await getObsidianFiles('tok-abc', 'soulman');
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toContain('/api/obsidian/files');
+    expect(url).toContain('folder=soulman');
+  });
+});
+
+describe('getObsidianFile', () => {
+  it('passes folder and file query params', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ content: 'hi' }) });
+
+    const result = await getObsidianFile('tok-abc', 'soulman', 'NOTES.md');
+
+    expect(result.content).toBe('hi');
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toContain('folder=soulman');
+    expect(url).toContain('file=NOTES.md');
+  });
+});
+
+describe('saveObsidianFile', () => {
+  it('sends a PUT with the folder/file/content body', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+
+    await saveObsidianFile('tok-abc', 'soulman', 'NOTES.md', 'new content');
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/obsidian/file');
+    expect(options.method).toBe('PUT');
+    expect(JSON.parse(options.body)).toEqual({ folder: 'soulman', file: 'NOTES.md', content: 'new content' });
+  });
+
+  it('throws ApiError on a non-2xx response', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: false, status: 404, json: async () => ({}) });
+
+    await expect(saveObsidianFile('tok-abc', 'soulman', 'missing.md', 'x')).rejects.toThrow(ApiError);
+  });
+});
+
+describe('createObsidianFile', () => {
+  it('sends a POST with the folder/file/content body', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+
+    await createObsidianFile('tok-abc', 'soulman', 'new.md', '');
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/obsidian/file');
+    expect(options.method).toBe('POST');
+    expect(JSON.parse(options.body)).toEqual({ folder: 'soulman', file: 'new.md', content: '' });
+  });
+});
+
+describe('renameObsidianFile', () => {
+  it('sends a POST to the rename endpoint with new_name', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+
+    await renameObsidianFile('tok-abc', 'soulman', 'old.md', 'new.md');
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/obsidian/file/rename');
+    expect(options.method).toBe('POST');
+    expect(JSON.parse(options.body)).toEqual({ folder: 'soulman', file: 'old.md', new_name: 'new.md' });
   });
 });
