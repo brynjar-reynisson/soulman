@@ -63,3 +63,139 @@ func TestListFiles_InvalidFolderName_ReturnsErrInvalidName(t *testing.T) {
 		}
 	}
 }
+
+func TestReadFile_ReturnsContent(t *testing.T) {
+	root := t.TempDir()
+	folder := filepath.Join(root, "vault")
+	os.Mkdir(folder, 0o755)
+	os.WriteFile(filepath.Join(folder, "note.md"), []byte("hello"), 0o644)
+
+	content, err := obsidian.ReadFile(root, "vault", "note.md")
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if content != "hello" {
+		t.Errorf("content = %q, want hello", content)
+	}
+}
+
+func TestReadFile_Missing_ReturnsErrNotFound(t *testing.T) {
+	root := t.TempDir()
+	os.Mkdir(filepath.Join(root, "vault"), 0o755)
+
+	_, err := obsidian.ReadFile(root, "vault", "missing.md")
+	if !errors.Is(err, obsidian.ErrNotFound) {
+		t.Fatalf("ReadFile() error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestReadFile_InvalidFileName_ReturnsErrInvalidName(t *testing.T) {
+	root := t.TempDir()
+	os.Mkdir(filepath.Join(root, "vault"), 0o755)
+
+	for _, file := range []string{"../secrets.md", `a\b.md`, "a/b.md", "note.png", ""} {
+		_, err := obsidian.ReadFile(root, "vault", file)
+		if !errors.Is(err, obsidian.ErrInvalidName) {
+			t.Errorf("ReadFile(%q) error = %v, want ErrInvalidName", file, err)
+		}
+	}
+}
+
+func TestWriteFile_OverwritesExistingContent(t *testing.T) {
+	root := t.TempDir()
+	folder := filepath.Join(root, "vault")
+	os.Mkdir(folder, 0o755)
+	os.WriteFile(filepath.Join(folder, "note.md"), []byte("old"), 0o644)
+
+	if err := obsidian.WriteFile(root, "vault", "note.md", "new"); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	b, _ := os.ReadFile(filepath.Join(folder, "note.md"))
+	if string(b) != "new" {
+		t.Errorf("file content = %q, want new", string(b))
+	}
+}
+
+func TestWriteFile_MissingFile_ReturnsErrNotFound(t *testing.T) {
+	root := t.TempDir()
+	os.Mkdir(filepath.Join(root, "vault"), 0o755)
+
+	err := obsidian.WriteFile(root, "vault", "missing.md", "content")
+	if !errors.Is(err, obsidian.ErrNotFound) {
+		t.Fatalf("WriteFile() error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestCreateFile_WritesNewFile(t *testing.T) {
+	root := t.TempDir()
+	folder := filepath.Join(root, "vault")
+	os.Mkdir(folder, 0o755)
+
+	if err := obsidian.CreateFile(root, "vault", "new.md", "hello"); err != nil {
+		t.Fatalf("CreateFile() error = %v", err)
+	}
+	b, err := os.ReadFile(filepath.Join(folder, "new.md"))
+	if err != nil {
+		t.Fatalf("expected file to exist: %v", err)
+	}
+	if string(b) != "hello" {
+		t.Errorf("content = %q, want hello", string(b))
+	}
+}
+
+func TestCreateFile_AlreadyExists_ReturnsErrExists(t *testing.T) {
+	root := t.TempDir()
+	folder := filepath.Join(root, "vault")
+	os.Mkdir(folder, 0o755)
+	os.WriteFile(filepath.Join(folder, "existing.md"), []byte("old"), 0o644)
+
+	err := obsidian.CreateFile(root, "vault", "existing.md", "new")
+	if !errors.Is(err, obsidian.ErrExists) {
+		t.Fatalf("CreateFile() error = %v, want ErrExists", err)
+	}
+	b, _ := os.ReadFile(filepath.Join(folder, "existing.md"))
+	if string(b) != "old" {
+		t.Errorf("existing file was overwritten: %q", string(b))
+	}
+}
+
+func TestRenameFile_RenamesToNewName(t *testing.T) {
+	root := t.TempDir()
+	folder := filepath.Join(root, "vault")
+	os.Mkdir(folder, 0o755)
+	os.WriteFile(filepath.Join(folder, "old.md"), []byte("content"), 0o644)
+
+	if err := obsidian.RenameFile(root, "vault", "old.md", "new.md"); err != nil {
+		t.Fatalf("RenameFile() error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(folder, "old.md")); !os.IsNotExist(err) {
+		t.Error("old.md still exists")
+	}
+	b, err := os.ReadFile(filepath.Join(folder, "new.md"))
+	if err != nil || string(b) != "content" {
+		t.Errorf("new.md content = %q, err = %v", string(b), err)
+	}
+}
+
+func TestRenameFile_SourceMissing_ReturnsErrNotFound(t *testing.T) {
+	root := t.TempDir()
+	os.Mkdir(filepath.Join(root, "vault"), 0o755)
+
+	err := obsidian.RenameFile(root, "vault", "missing.md", "new.md")
+	if !errors.Is(err, obsidian.ErrNotFound) {
+		t.Fatalf("RenameFile() error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestRenameFile_DestinationExists_ReturnsErrExists(t *testing.T) {
+	root := t.TempDir()
+	folder := filepath.Join(root, "vault")
+	os.Mkdir(folder, 0o755)
+	os.WriteFile(filepath.Join(folder, "a.md"), []byte("a"), 0o644)
+	os.WriteFile(filepath.Join(folder, "b.md"), []byte("b"), 0o644)
+
+	err := obsidian.RenameFile(root, "vault", "a.md", "b.md")
+	if !errors.Is(err, obsidian.ErrExists) {
+		t.Fatalf("RenameFile() error = %v, want ErrExists", err)
+	}
+}

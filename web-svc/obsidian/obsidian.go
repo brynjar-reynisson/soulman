@@ -116,3 +116,75 @@ func isWithin(base, target string) bool {
 	}
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
+
+// ReadFile returns the content of root/folder/file.
+func ReadFile(root, folder, file string) (string, error) {
+	path, err := resolveFile(root, folder, file)
+	if err != nil {
+		return "", err
+	}
+	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("obsidian: reading file %s: %w", path, err)
+	}
+	return string(b), nil
+}
+
+// WriteFile overwrites an existing file's content. Returns ErrNotFound if
+// it doesn't already exist — this is the "edit" path, not "create".
+func WriteFile(root, folder, file, content string) error {
+	path, err := resolveFile(root, folder, file)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return ErrNotFound
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("obsidian: writing file %s: %w", path, err)
+	}
+	return nil
+}
+
+// CreateFile creates a new file. Returns ErrExists if it already exists.
+func CreateFile(root, folder, file, content string) error {
+	path, err := resolveFile(root, folder, file)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); err == nil {
+		return ErrExists
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("obsidian: creating file %s: %w", path, err)
+	}
+	return nil
+}
+
+// RenameFile renames a file within the same folder. Returns ErrNotFound if
+// the source doesn't exist, ErrExists if the destination does. This is a
+// check-then-act sequence (not atomic against a concurrent writer) — an
+// accepted narrow race given this is a single-owner tool.
+func RenameFile(root, folder, oldName, newName string) error {
+	oldPath, err := resolveFile(root, folder, oldName)
+	if err != nil {
+		return err
+	}
+	newPath, err := resolveFile(root, folder, newName)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(oldPath); os.IsNotExist(err) {
+		return ErrNotFound
+	}
+	if _, err := os.Stat(newPath); err == nil {
+		return ErrExists
+	}
+	if err := os.Rename(oldPath, newPath); err != nil {
+		return fmt.Errorf("obsidian: renaming %s to %s: %w", oldPath, newPath, err)
+	}
+	return nil
+}
