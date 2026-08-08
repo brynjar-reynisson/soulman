@@ -19,7 +19,10 @@ vi.mock('../api', async () => {
   };
 });
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  window.history.replaceState(null, '', '/');
+});
 
 describe('ObsidianFileList', () => {
   it('lists files for the given folder', async () => {
@@ -153,5 +156,49 @@ describe('ObsidianFileList rename', () => {
     await userEvent.click(screen.getByRole('button', { name: /confirm/i }));
 
     expect(await screen.findByText(/could not rename file/i)).toBeInTheDocument();
+  });
+});
+
+describe('ObsidianFileList URL persistence', () => {
+  it('restores the previously selected file from the URL on mount', async () => {
+    window.history.replaceState(null, '', '/?folder=soulman&file=NOTES.md');
+    mockGetObsidianFiles.mockResolvedValue({ files: ['NOTES.md', 'todo.txt'] });
+    mockGetObsidianFile.mockResolvedValue({ content: 'hello' });
+    const { ObsidianFileList } = await import('./ObsidianFileList');
+    render(<ObsidianFileList folder="soulman" />);
+
+    expect(await screen.findByText('hello')).toBeInTheDocument();
+  });
+
+  it('ignores a URL file param that belongs to a different folder', async () => {
+    window.history.replaceState(null, '', '/?folder=other-folder&file=NOTES.md');
+    mockGetObsidianFiles.mockResolvedValue({ files: ['NOTES.md'] });
+    const { ObsidianFileList } = await import('./ObsidianFileList');
+    render(<ObsidianFileList folder="soulman" />);
+
+    await screen.findByText('NOTES.md');
+    expect(screen.queryByText('hello')).not.toBeInTheDocument();
+    expect(mockGetObsidianFile).not.toHaveBeenCalled();
+  });
+
+  it('restores edit mode from a persisted mode=edit URL param', async () => {
+    window.history.replaceState(null, '', '/?folder=soulman&file=NOTES.md&mode=edit');
+    mockGetObsidianFiles.mockResolvedValue({ files: ['NOTES.md'] });
+    mockGetObsidianFile.mockResolvedValue({ content: 'hello' });
+    const { ObsidianFileList } = await import('./ObsidianFileList');
+    render(<ObsidianFileList folder="soulman" />);
+
+    expect(await screen.findByRole('textbox')).toHaveValue('hello');
+  });
+
+  it('writes the selected file to the URL when a file is clicked', async () => {
+    mockGetObsidianFiles.mockResolvedValue({ files: ['NOTES.md'] });
+    mockGetObsidianFile.mockResolvedValue({ content: 'hello' });
+    const { ObsidianFileList } = await import('./ObsidianFileList');
+    render(<ObsidianFileList folder="soulman" />);
+
+    await userEvent.click(await screen.findByText('NOTES.md'));
+
+    expect(new URLSearchParams(window.location.search).get('file')).toBe('NOTES.md');
   });
 });

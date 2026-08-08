@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -9,6 +9,8 @@ vi.mock('../api', async () => {
 });
 
 describe('ObsidianPage', () => {
+  beforeEach(() => window.history.replaceState(null, '', '/'));
+
   it('calls onBack when the back link is clicked', async () => {
     const onBack = vi.fn();
     const { ObsidianPage } = await import('./ObsidianPage');

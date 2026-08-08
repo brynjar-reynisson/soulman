@@ -2,23 +2,34 @@ import { useEffect, useState } from 'react';
 import { getAccessToken } from '../auth';
 import { getObsidianFiles, createObsidianFile, renameObsidianFile } from '../api';
 import { ObsidianFileViewer } from './ObsidianFileViewer';
+import { getParam, setParams } from '../urlState';
 
 export function ObsidianFileList({ folder }: { folder: string }) {
   const [files, setFiles] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  // This component is only ever mounted while `folder` is the expanded
+  // folder (see ObsidianFolderList), so a URL `file` param left over from
+  // before a reload belongs to this folder and can seed initial selection.
+  const [selected, setSelected] = useState<string | null>(() =>
+    getParam('folder') === folder ? getParam('file') : null
+  );
   // Tracks the filename of a file just created via handleCreate, so the
   // viewer below can be told to open it directly in edit mode instead of
   // an empty view step. Cleared as soon as the user makes any other
   // explicit selection, so it never re-applies on a later click.
   const [justCreated, setJustCreated] = useState<string | null>(null);
+  // Mirrors justCreated but sourced from a persisted `mode=edit` URL param
+  // instead of an in-session creation, so a reload while mid-edit reopens
+  // the same file in edit mode. Captured once at mount — later edits are
+  // tracked by ObsidianFileViewer itself via the URL.
+  const [restoredEditFile] = useState<string | null>(() =>
+    getParam('folder') === folder && getParam('mode') === 'edit' ? getParam('file') : null
+  );
 
   useEffect(() => {
     let active = true;
     setFiles(null);
     setError(null);
-    setSelected(null);
-    setJustCreated(null);
     (async () => {
       const token = await getAccessToken();
       try {
@@ -46,6 +57,7 @@ export function ObsidianFileList({ folder }: { folder: string }) {
       setFiles(data.files ?? []);
       setSelected(newFileName);
       setJustCreated(newFileName);
+      setParams({ file: newFileName, mode: 'edit' });
       setCreating(false);
       setNewFileName('');
     } catch {
@@ -64,7 +76,10 @@ export function ObsidianFileList({ folder }: { folder: string }) {
       await renameObsidianFile(token, folder, oldName, renameValue);
       const data = await getObsidianFiles(token, folder);
       setFiles(data.files ?? []);
-      if (selected === oldName) setSelected(renameValue);
+      if (selected === oldName) {
+        setSelected(renameValue);
+        setParams({ file: renameValue });
+      }
       if (justCreated === oldName) setJustCreated(null);
       setRenamingFile(null);
     } catch {
@@ -100,7 +115,9 @@ export function ObsidianFileList({ folder }: { folder: string }) {
                   <button
                     onClick={() => {
                       if (justCreated !== f) setJustCreated(null);
+                      const switchingFile = f !== selected;
                       setSelected(f);
+                      setParams(switchingFile ? { file: f, mode: null } : { file: f });
                     }}
                     className={`text-sm underline ${selected === f ? 'font-semibold' : ''}`}
                   >
@@ -128,7 +145,7 @@ export function ObsidianFileList({ folder }: { folder: string }) {
           <ObsidianFileViewer
             folder={folder}
             file={selected}
-            initialMode={selected === justCreated ? 'edit' : 'view'}
+            initialMode={selected === justCreated || selected === restoredEditFile ? 'edit' : 'view'}
           />
         </div>
       )}

@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { getAccessToken } from '../auth';
 import { getObsidianFolders } from '../api';
 import { ObsidianFileList } from './ObsidianFileList';
+import { getParam, setParams } from '../urlState';
 
 export function ObsidianFolderList() {
   const [folders, setFolders] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(() => getParam('folder'));
 
   useEffect(() => {
     let active = true;
@@ -33,7 +34,11 @@ export function ObsidianFolderList() {
           {folders.map((f) => (
             <li key={f}>
               <button
-                onClick={() => setExpanded(expanded === f ? null : f)}
+                onClick={() => {
+                  const next = expanded === f ? null : f;
+                  setExpanded(next);
+                  setParams({ folder: next, file: null, mode: null });
+                }}
                 className="text-sm font-medium underline"
               >
                 {f}

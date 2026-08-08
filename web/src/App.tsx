@@ -5,6 +5,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { RestrictedScreen } from './components/RestrictedScreen';
 import { Dashboard } from './components/Dashboard';
 import { ObsidianPage } from './components/ObsidianPage';
+import { getParam, setParams } from './urlState';
 
 type ViewState = 'loading' | 'login' | 'restricted' | 'dashboard' | 'obsidian';
 
@@ -26,7 +27,7 @@ function App() {
         const s = await getStatus(token);
         if (!active) return;
         setStatus(s);
-        setView('dashboard');
+        setView(getParam('page') === 'obsidian' ? 'obsidian' : 'dashboard');
       } catch (err) {
         if (!active) return;
         if (err instanceof ApiError && err.status === 403) {
@@ -44,9 +45,27 @@ function App() {
   if (view === 'loading') return <div className="p-8 text-center">Loading...</div>;
   if (view === 'login') return <LoginScreen onSignIn={signIn} />;
   if (view === 'restricted') return <RestrictedScreen onSignOut={signOut} />;
-  if (view === 'obsidian') return <ObsidianPage onBack={() => setView('dashboard')} />;
+  if (view === 'obsidian') {
+    return (
+      <ObsidianPage
+        onBack={() => {
+          setParams({ page: null, folder: null, file: null, mode: null });
+          setView('dashboard');
+        }}
+      />
+    );
+  }
 
-  return <Dashboard initialStatus={status} onSignOut={signOut} onOpenObsidian={() => setView('obsidian')} />;
+  return (
+    <Dashboard
+      initialStatus={status}
+      onSignOut={signOut}
+      onOpenObsidian={() => {
+        setParams({ page: 'obsidian' });
+        setView('obsidian');
+      }}
+    />
+  );
 }
 
 export default App;

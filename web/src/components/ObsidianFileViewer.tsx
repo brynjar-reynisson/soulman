@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { getAccessToken } from '../auth';
 import { getObsidianFile } from '../api';
 import { ObsidianFileEditor } from './ObsidianFileEditor';
+import { setParams } from '../urlState';
 
 export function ObsidianFileViewer({
   folder,
@@ -36,6 +37,10 @@ export function ObsidianFileViewer({
       active = false;
     };
   }, [folder, file, initialMode]);
+
+  useEffect(() => {
+    setParams({ mode: mode === 'edit' ? 'edit' : null });
+  }, [mode]);
 
   if (mode === 'edit' && content !== null) {
     return (

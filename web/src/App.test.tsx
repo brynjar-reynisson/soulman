@@ -16,6 +16,7 @@ vi.mock('./api', async () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.history.replaceState(null, '', '/');
 });
 
 describe('App', () => {
@@ -75,5 +76,39 @@ describe('App', () => {
     await userEvent.click(screen.getByText(/soulman/i));
 
     expect(await screen.findByText(/soulman dashboard/i)).toBeInTheDocument();
+  });
+
+  it('restores the obsidian page from a page=obsidian URL param on mount', async () => {
+    window.history.replaceState(null, '', '/?page=obsidian');
+    mockUseAuth.mockReturnValue({
+      user: { email: 'breynisson@gmail.com' },
+      loading: false,
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+    });
+    mockGetStatus.mockResolvedValue({ 'memory-svc': 'up' });
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: /obsidian/i })).toBeInTheDocument();
+  });
+
+  it('clears obsidian navigation params from the URL when going back to the dashboard', async () => {
+    window.history.replaceState(null, '', '/?page=obsidian&folder=soulman&file=NOTES.md&mode=edit');
+    mockUseAuth.mockReturnValue({
+      user: { email: 'breynisson@gmail.com' },
+      loading: false,
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+    });
+    mockGetStatus.mockResolvedValue({ 'memory-svc': 'up' });
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await screen.findByRole('heading', { name: /obsidian/i });
+    await userEvent.click(screen.getByText(/soulman/i));
+
+    await screen.findByText(/soulman dashboard/i);
+    expect(window.location.search).toBe('');
   });
 });
