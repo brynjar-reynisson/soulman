@@ -68,7 +68,7 @@ Dev and prod share one local NATS server and one local Postgres instance. Each s
 
 `web-svc` follows the same port convention (`9005` prod / `9015` dev) but has no JetStream consumer and no NATS subscription at all — it only makes outbound HTTP calls to the other four services and reads report files directly off disk, so it needs no `consumer_names` entry and isn't part of the STIMULUS/THINKING_REQUEST/MEMORY_WRITE stream discussion above.
 
-`soulman-prod/` mirrors `soulman-dev/`'s layout exactly but was provisioned later and has no credentials filled in yet; `memory_prod`'s Postgres schema doesn't exist yet either, so prod's `memory-svc` logs to file but every DB insert fails until that schema is created.
+`soulman-prod/` mirrors `soulman-dev/`'s layout exactly but was provisioned later. `memory_prod`'s Postgres schema (`raw_inputs` + `episodes`, same DDL as `memory_dev` — see `docs/superpowers/specs/sql/`) was created by hand on 2026-08-08, after going unnoticed long enough to balloon `memory-svc-startup-err.log` to 11M lines / 2.46GB via infinite NATS redelivery retries — see `memory-svc/NOTES.md`'s incident writeup for the full story and the dependency-health blind spot it exposed.
 
 ### Startup
 

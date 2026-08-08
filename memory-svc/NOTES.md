@@ -12,7 +12,7 @@ Unlike the STIMULUS consumer (`natsconsumer.Consumer`), `MemoryWriteConsumer` do
 
 ## The episodes table isn't created by memory-svc
 
-Same as `raw_inputs`: `memory-svc` never runs its own DDL. The `episodes` table is applied by hand once per environment via `docs/superpowers/specs/sql/2026-07-18-episodes-table.sql`. As of this writing it's applied to `memory_dev` only — `memory_prod`'s schema doesn't exist yet at all (see root `CLAUDE.md`).
+Same as `raw_inputs`: `memory-svc` never runs its own DDL. Both tables are applied by hand once per environment — `episodes` via `docs/superpowers/specs/sql/2026-07-18-episodes-table.sql`, `raw_inputs` via `docs/superpowers/specs/sql/2026-08-08-raw-inputs-table.sql` (added retroactively, see the incident below — no DDL for `raw_inputs` had ever been committed before this, since `memory_dev`'s copy was originally created live by the `soulman-db-builder` OpenCode agent rather than from a checked-in file).
 
 ## Leveled logging (log/slog, added 2026-07-27)
 
@@ -27,3 +27,13 @@ Postgres connectivity is tracked via a `common/dephealth.Registry`, wrapped by `
 ## Known gap: buffered writes don't auto-replay after a mid-run reconnect (as of 2026-07-27)
 
 `storage.Writer.ReplayPending` only runs once, at startup (`main.go`). The `Reconnector` (added alongside `DBHolder`, same date) makes a Postgres outage self-healing without a process restart — but nothing currently triggers a replay when that reconnect succeeds mid-run. Net effect: after a self-healed outage, new writes resume flowing to Postgres immediately, but any entries buffered to `raw_inputs.jsonl` *during* that outage stay unsynced until the next process restart (not data loss — the file log is durable and `start-everything.ps1` restarts every login — just delayed). Wiring a reconnect-triggered replay needs its own small design (avoiding a race with writes that are in flight when the replay starts) — deferred to a follow-up task rather than rushed into this branch.
+
+## Incident: memory_prod schema still missing, 11M-line/2.46GB error log (2026-08-08)
+
+The gap noted above ("`memory_prod`'s schema doesn't exist yet at all") went unaddressed for over a week and caused a second log-bloat incident, distinct in root cause from the 2026-07-27 one: every insert failed with `relation "memory_prod.raw_inputs"` (later `memory_prod.episodes`) `does not exist (SQLSTATE 42P01)`, and every failure NAKed its NATS message for 5s-delay redelivery — an infinite retry loop that produced `memory-svc-startup-err.log` at 11M+ lines / 2.46GB over roughly 9 days before being caught (via a disk-usage scan, not via any alert).
+
+**Why the 2026-07-27 dependency-health work didn't catch this:** `dephealth`/`DBHolder`/`Reconnector` all track *connectivity* (can we dial and ping Postgres) — that was fine the whole time. A missing table is a query-level failure on an otherwise-healthy connection, so `GET /health`'s `dependencies.postgres` reported `"ok"` throughout the entire 9-day outage. This class of failure — schema/DDL drift on an environment that's otherwise reachable — is invisible to the current health check. No fix attempted here; flagging it as a real blind spot for whoever next touches dependency health.
+
+**Fix applied:** created `memory_prod` schema + `raw_inputs` + `episodes` tables by hand (via `docker exec -i supabase_db_agent-suite psql`, both tables verified column-for-column identical to the live `memory_dev` copies — see `\d` output captured during the fix), restarted prod's `memory-svc`. Confirmed clean: 189 file-buffered `raw_inputs` rows and 146 NATS-redelivered `episodes` rows landed with zero new error lines afterward. The 2.46GB log was archived then deleted (its 11M lines were 100% the same repeated error, fully summarized in `soulman-prod/MEMORY_SVC_LOG_FINDINGS.md` from the initial investigation) — not merged into the fresh log.
+
+**Process gap, not just a data gap:** this was caught by manually noticing disk usage, not by any monitoring. `perception-svc`'s `internal_health` check would have caught a connectivity-down transition immediately (see above) but is structurally blind to this failure mode. There's currently no alert on log file size or growth rate either. Both are real gaps; neither fixed here.
