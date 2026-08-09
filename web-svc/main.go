@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"soulman/web-svc/auth"
+	"soulman/web-svc/claudesession"
 	"soulman/web-svc/config"
 	"soulman/web-svc/httpserver"
 )
@@ -20,14 +21,20 @@ func main() {
 
 	verifier := auth.NewVerifier(cfg.SupabaseURL, cfg.SupabaseJWTSecret, cfg.OwnerEmail)
 
+	claudeRoots := make([]claudesession.Root, len(cfg.ClaudeProjectRoots))
+	for i, r := range cfg.ClaudeProjectRoots {
+		claudeRoots[i] = claudesession.Root{Label: r.Label, Path: r.Path}
+	}
+
 	srv := httpserver.New(cfg.HTTPPort, httpserver.Config{
-		CORSAllowedOrigin: cfg.CORSAllowedOrigin,
-		PerceptionSvcURL:  cfg.PerceptionSvcURL,
-		MemorySvcURL:      cfg.MemorySvcURL,
-		ThinkingSvcURL:    cfg.ThinkingSvcURL,
-		ActionSvcURL:      cfg.ActionSvcURL,
-		ReportsRoot:       cfg.SoulmanRoot,
-		ObsidianRoot:      cfg.ObsidianRoot,
+		CORSAllowedOrigin:  cfg.CORSAllowedOrigin,
+		PerceptionSvcURL:   cfg.PerceptionSvcURL,
+		MemorySvcURL:       cfg.MemorySvcURL,
+		ThinkingSvcURL:     cfg.ThinkingSvcURL,
+		ActionSvcURL:       cfg.ActionSvcURL,
+		ReportsRoot:        cfg.SoulmanRoot,
+		ObsidianRoot:       cfg.ObsidianRoot,
+		ClaudeProjectRoots: claudeRoots,
 	}, verifier)
 
 	go func() {
