@@ -142,3 +142,24 @@ export const renameObsidianFile = (
   newName: string,
 ): Promise<void> =>
   mutateJSON('POST', '/api/obsidian/file/rename', token, { folder, file, new_name: newName });
+
+export interface ClaudeRootListing {
+  label: string;
+  path: string;
+  exists: boolean;
+  folders: string[];
+}
+
+export interface ClaudeRoots {
+  roots: ClaudeRootListing[];
+}
+
+export const getClaudeRoots = (token: string | null): Promise<ClaudeRoots> =>
+  getJSON('/api/claude/roots', token);
+
+export const launchClaudeSession = (
+  token: string | null,
+  root: string,
+  folder: string,
+  sessionName: string,
+): Promise<void> => mutateJSON('POST', '/api/claude/launch', token, { root, folder, sessionName });

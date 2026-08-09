@@ -11,6 +11,8 @@ import {
   saveObsidianFile,
   createObsidianFile,
   renameObsidianFile,
+  getClaudeRoots,
+  launchClaudeSession,
   ApiError,
 } from './api';
 
@@ -190,5 +192,39 @@ describe('renameObsidianFile', () => {
     expect(url).toBe('/api/obsidian/file/rename');
     expect(options.method).toBe('POST');
     expect(JSON.parse(options.body)).toEqual({ folder: 'soulman', file: 'old.md', new_name: 'new.md' });
+  });
+});
+
+describe('getClaudeRoots', () => {
+  it('calls the claude/roots endpoint', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ roots: [] }) });
+
+    const result = await getClaudeRoots('tok-abc');
+
+    expect(result.roots).toEqual([]);
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toContain('/api/claude/roots');
+  });
+});
+
+describe('launchClaudeSession', () => {
+  it('sends a POST with root/folder/sessionName body', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: true, status: 204, json: async () => ({}) });
+
+    await launchClaudeSession('tok-abc', 'Obsidian', 'soulman', 'soulman');
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/claude/launch');
+    expect(options.method).toBe('POST');
+    expect(JSON.parse(options.body)).toEqual({ root: 'Obsidian', folder: 'soulman', sessionName: 'soulman' });
+  });
+
+  it('throws ApiError on a non-2xx response', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+
+    await expect(launchClaudeSession('tok-abc', 'Obsidian', 'soulman', 'x')).rejects.toThrow(ApiError);
   });
 });
