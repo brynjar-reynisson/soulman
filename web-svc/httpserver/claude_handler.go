@@ -3,6 +3,7 @@ package httpserver
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"soulman/web-svc/claudesession"
@@ -64,8 +65,10 @@ func writeClaudeSessionError(w http.ResponseWriter, err error) {
 	case errors.Is(err, claudesession.ErrInvalidName):
 		writeJSONError(w, http.StatusBadRequest, "invalid name")
 	case errors.Is(err, claudesession.ErrLaunchFailed):
+		slog.Error("claude session launch failed", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "launch failed")
 	default:
+		slog.Error("claude session unexpected error", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "internal error")
 	}
 }
