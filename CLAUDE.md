@@ -74,6 +74,8 @@ Dev and prod share one local NATS server and one local Postgres instance. Each s
 
 `C:\Users\Lenovo\start-everything.ps1` (via `Start Everything.lnk` in the Windows Startup folder) builds and starts all five services (including `web-svc`) in both `soulman-dev` and `soulman-prod` on every login — a git pull here is picked up on the next login without a separate deploy step. `setup-firewall-rules.ps1` (run once, elevated) pre-creates the Windows Firewall rules each service's `http.ListenAndServe` needs so a rebuild doesn't re-trigger the "app blocked" prompt.
 
+**Never hand-roll a robocopy/copy/delete command against `soulman-dev` or `soulman-prod`.** Neither is a git repo — there's no undo. Always rebuild/restart a service via its own `run-<svc>.ps1` in that environment's directory (or `start-everything.ps1` for all of them); each one already handles `.env` correctly (e.g. `run-web.ps1`'s `robocopy ... /XF .env*`, added after a real incident where `/MIR` silently deleted a live `.env` and broke Supabase auth). A command that bypasses these scripts has none of that protection.
+
 `start-everything.ps1` also runs `web` (the frontend) per environment via the same generic launcher, but its `run-web.ps1` differs from the Go services' pattern: instead of building in place, it `robocopy /MIR`s `web/` from the vault into a private per-environment copy (`<env-root>\web\`, excluding `node_modules`/`dist`) before running `npm ci`, so dev's and prod's installed dependencies and build output never collide — mirroring the isolation each Go service already gets from building into its own `bin/`. Dev then runs `npm run dev` (Vite dev server); prod runs `npm run build && npm run preview`.
 
 ### Shared modules
