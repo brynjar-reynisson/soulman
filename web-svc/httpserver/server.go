@@ -12,19 +12,21 @@ import (
 	"github.com/go-chi/cors"
 
 	"soulman/web-svc/auth"
+	"soulman/web-svc/claudesession"
 )
 
 // Config holds the values httpserver needs beyond the port and verifier —
 // kept as its own struct (rather than depending on web-svc/config
 // directly) so tests can construct it without going through config.Load.
 type Config struct {
-	CORSAllowedOrigin string
-	PerceptionSvcURL  string
-	MemorySvcURL      string
-	ThinkingSvcURL    string
-	ActionSvcURL      string
-	ReportsRoot       string
-	ObsidianRoot      string
+	CORSAllowedOrigin  string
+	PerceptionSvcURL   string
+	MemorySvcURL       string
+	ThinkingSvcURL     string
+	ActionSvcURL       string
+	ReportsRoot        string
+	ObsidianRoot       string
+	ClaudeProjectRoots []claudesession.Root
 }
 
 type Server struct {
@@ -79,6 +81,7 @@ func (s *Server) buildRouter() chi.Router {
 		r.Put("/api/obsidian/file", s.obsidianFilePut)
 		r.Post("/api/obsidian/file", s.obsidianFilePost)
 		r.Post("/api/obsidian/file/rename", s.obsidianFileRename)
+		r.Get("/api/claude/roots", s.claudeRoots)
 	})
 
 	return r
