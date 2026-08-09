@@ -5,9 +5,17 @@ import { LoginScreen } from './components/LoginScreen';
 import { RestrictedScreen } from './components/RestrictedScreen';
 import { Dashboard } from './components/Dashboard';
 import { ObsidianPage } from './components/ObsidianPage';
+import { ClaudePage } from './components/ClaudePage';
 import { getParam, setParams } from './urlState';
 
-type ViewState = 'loading' | 'login' | 'restricted' | 'dashboard' | 'obsidian';
+type ViewState = 'loading' | 'login' | 'restricted' | 'dashboard' | 'obsidian' | 'claude';
+
+function viewFromPageParam(): ViewState {
+  const page = getParam('page');
+  if (page === 'obsidian') return 'obsidian';
+  if (page === 'claude') return 'claude';
+  return 'dashboard';
+}
 
 function App() {
   const { user, loading: authLoading, signIn, signOut } = useAuth();
@@ -27,7 +35,7 @@ function App() {
         const s = await getStatus(token);
         if (!active) return;
         setStatus(s);
-        setView(getParam('page') === 'obsidian' ? 'obsidian' : 'dashboard');
+        setView(viewFromPageParam());
       } catch (err) {
         if (!active) return;
         if (err instanceof ApiError && err.status === 403) {
@@ -55,6 +63,16 @@ function App() {
       />
     );
   }
+  if (view === 'claude') {
+    return (
+      <ClaudePage
+        onBack={() => {
+          setParams({ page: null, claudeRoot: null });
+          setView('dashboard');
+        }}
+      />
+    );
+  }
 
   return (
     <Dashboard
@@ -63,6 +81,10 @@ function App() {
       onOpenObsidian={() => {
         setParams({ page: 'obsidian' });
         setView('obsidian');
+      }}
+      onOpenClaude={() => {
+        setParams({ page: 'claude' });
+        setView('claude');
       }}
     />
   );

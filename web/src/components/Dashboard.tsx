@@ -8,16 +8,21 @@ export function Dashboard({
   initialStatus,
   onSignOut,
   onOpenObsidian,
+  onOpenClaude,
 }: {
   initialStatus: ServiceStatus | null;
   onSignOut: () => void;
   onOpenObsidian: () => void;
+  onOpenClaude: () => void;
 }) {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Soulman Dashboard</h1>
         <div className="flex items-center gap-4">
+          <button onClick={onOpenClaude} className="text-sm text-gray-500 underline">
+            Claude
+          </button>
           <button onClick={onOpenObsidian} className="text-sm text-gray-500 underline">
             Obsidian
           </button>

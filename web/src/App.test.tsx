@@ -111,4 +111,40 @@ describe('App', () => {
     await screen.findByText(/soulman dashboard/i);
     expect(window.location.search).toBe('');
   });
+
+  it('switches to the claude page and back via the header links', async () => {
+    mockUseAuth.mockReturnValue({
+      user: { email: 'breynisson@gmail.com' },
+      loading: false,
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+    });
+    mockGetStatus.mockResolvedValue({ 'memory-svc': 'up' });
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await screen.findByText(/soulman dashboard/i);
+    await userEvent.click(screen.getByRole('button', { name: /claude/i }));
+
+    expect(await screen.findByRole('heading', { name: /claude/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText(/soulman/i));
+
+    expect(await screen.findByText(/soulman dashboard/i)).toBeInTheDocument();
+  });
+
+  it('restores the claude page from a page=claude URL param on mount', async () => {
+    window.history.replaceState(null, '', '/?page=claude');
+    mockUseAuth.mockReturnValue({
+      user: { email: 'breynisson@gmail.com' },
+      loading: false,
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+    });
+    mockGetStatus.mockResolvedValue({ 'memory-svc': 'up' });
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: /claude/i })).toBeInTheDocument();
+  });
 });
