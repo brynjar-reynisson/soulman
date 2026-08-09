@@ -8,8 +8,12 @@ package claudesession
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"sort"
+	"strings"
 )
 
 var (
@@ -65,4 +69,68 @@ func listFolders(root string) []string {
 	}
 	sort.Strings(folders)
 	return folders
+}
+
+// validSegment rejects anything that isn't a single, plain path
+// component — see web-svc/obsidian's identical guard for the full
+// rationale (path traversal and NTFS alternate-data-stream protection).
+func validSegment(name string) bool {
+	return name != "" && !strings.ContainsAny(name, `/\`) && name != "." && name != ".." && filepath.IsLocal(name)
+}
+
+func isWithin(base, target string) bool {
+	rel, err := filepath.Rel(base, target)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// resolveDir validates folder as a single path segment directly under
+// root.Path, confirms the joined path stays within root.Path, and
+// confirms it exists and is a directory.
+func resolveDir(root Root, folder string) (string, error) {
+	if !validSegment(folder) {
+		return "", ErrInvalidName
+	}
+	cleanRoot := filepath.Clean(root.Path)
+	dir := filepath.Join(cleanRoot, folder)
+	if !isWithin(cleanRoot, dir) {
+		return "", ErrInvalidName
+	}
+	info, err := os.Stat(dir)
+	if os.IsNotExist(err) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("claudesession: stat %s: %w", dir, err)
+	}
+	if !info.IsDir() {
+		return "", ErrNotFound
+	}
+	return dir, nil
+}
+
+// Launch starts `claude --remote-control --name sessionName` detached,
+// with its working directory set to root.Path/folder. It does not wait
+// for the process, capture its output, or track it after Start()
+// succeeds. sessionName is passed as a literal exec.Command argument
+// (never through a shell), so it carries no injection risk regardless
+// of its contents.
+func Launch(root Root, folder, sessionName string) error {
+	if sessionName == "" {
+		return ErrInvalidName
+	}
+	dir, err := resolveDir(root, folder)
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command("claude", "--remote-control", "--name", sessionName)
+	cmd.Dir = dir
+	detach(cmd)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("%w: %v", ErrLaunchFailed, err)
+	}
+	cmd.Process.Release()
+	return nil
 }

@@ -1,6 +1,7 @@
 package claudesession
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -75,5 +76,85 @@ func TestListRoots_EmptyRootDirectory_ReturnsEmptyNotNilFolders(t *testing.T) {
 	}
 	if len(listings[0].Folders) != 0 {
 		t.Fatalf("Folders = %v, want empty", listings[0].Folders)
+	}
+}
+
+func TestResolveDir_InvalidFolderName_ReturnsErrInvalidName(t *testing.T) {
+	root := Root{Label: "Test", Path: t.TempDir()}
+
+	for _, folder := range []string{"..", "../etc", `a\b`, "a/b", ""} {
+		_, err := resolveDir(root, folder)
+		if !errors.Is(err, ErrInvalidName) {
+			t.Errorf("resolveDir(%q) error = %v, want ErrInvalidName", folder, err)
+		}
+	}
+}
+
+func TestResolveDir_MissingFolder_ReturnsErrNotFound(t *testing.T) {
+	root := Root{Label: "Test", Path: t.TempDir()}
+
+	_, err := resolveDir(root, "does-not-exist")
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("resolveDir() error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestResolveDir_FolderIsAFile_ReturnsErrNotFound(t *testing.T) {
+	rootPath := t.TempDir()
+	os.WriteFile(filepath.Join(rootPath, "not-a-folder"), []byte("x"), 0o644)
+	root := Root{Label: "Test", Path: rootPath}
+
+	_, err := resolveDir(root, "not-a-folder")
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("resolveDir() error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestResolveDir_ValidFolder_ReturnsJoinedAbsolutePath(t *testing.T) {
+	rootPath := t.TempDir()
+	os.Mkdir(filepath.Join(rootPath, "myproject"), 0o755)
+	root := Root{Label: "Test", Path: rootPath}
+
+	dir, err := resolveDir(root, "myproject")
+	if err != nil {
+		t.Fatalf("resolveDir() error = %v", err)
+	}
+	want := filepath.Join(rootPath, "myproject")
+	if dir != want {
+		t.Errorf("dir = %q, want %q", dir, want)
+	}
+}
+
+// Launch tests below deliberately stop at a validation error (empty
+// name, invalid folder segment, or missing folder) — every one of these
+// returns before Launch reaches exec.Command. A test that supplied a
+// valid folder AND a valid sessionName together would actually spawn a
+// real `claude --remote-control` process; that combination must never
+// be exercised by an automated test. See this plan's Global Constraints.
+
+func TestLaunch_EmptySessionName_ReturnsErrInvalidName(t *testing.T) {
+	root := Root{Label: "Test", Path: t.TempDir()}
+
+	err := Launch(root, "anything", "")
+	if !errors.Is(err, ErrInvalidName) {
+		t.Fatalf("Launch() error = %v, want ErrInvalidName", err)
+	}
+}
+
+func TestLaunch_InvalidFolder_ReturnsErrInvalidName(t *testing.T) {
+	root := Root{Label: "Test", Path: t.TempDir()}
+
+	err := Launch(root, "../etc", "my-session")
+	if !errors.Is(err, ErrInvalidName) {
+		t.Fatalf("Launch() error = %v, want ErrInvalidName", err)
+	}
+}
+
+func TestLaunch_MissingFolder_ReturnsErrNotFound(t *testing.T) {
+	root := Root{Label: "Test", Path: t.TempDir()}
+
+	err := Launch(root, "does-not-exist", "my-session")
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Launch() error = %v, want ErrNotFound", err)
 	}
 }
