@@ -111,12 +111,19 @@ func resolveDir(root Root, folder string) (string, error) {
 	return dir, nil
 }
 
-// Launch starts `claude --remote-control --name sessionName` detached,
-// with its working directory set to root.Path/folder. It does not wait
-// for the process, capture its output, or track it after Start()
-// succeeds. sessionName is passed as a literal exec.Command argument
-// (never through a shell), so it carries no injection risk regardless
-// of its contents.
+// Launch starts `claude --remote-control --bg --name sessionName` detached,
+// with its working directory set to root.Path/folder. --bg is required:
+// without it, `claude --remote-control` runs as a normal interactive
+// foreground session expecting a real terminal, but Launch gives the
+// child no stdin/stdout/stderr (all three go to the null device, since
+// this is fire-and-forget) — without a terminal to attach to, the plain
+// command exits immediately and silently, with nothing left running and
+// no error anywhere to explain why (see web-svc/NOTES.md's "Claude
+// remote-session launcher" section for the incident this fixed). Launch
+// does not wait for the process, capture its output, or track it after
+// Start() succeeds. sessionName is passed as a literal exec.Command
+// argument (never through a shell), so it carries no injection risk
+// regardless of its contents.
 func Launch(root Root, folder, sessionName string) error {
 	if sessionName == "" {
 		return ErrInvalidName
@@ -125,7 +132,7 @@ func Launch(root Root, folder, sessionName string) error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command("claude", "--remote-control", "--name", sessionName)
+	cmd := exec.Command("claude", "--remote-control", "--bg", "--name", sessionName)
 	cmd.Dir = dir
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
