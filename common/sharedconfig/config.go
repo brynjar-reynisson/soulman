@@ -118,19 +118,33 @@ type DNDConfig struct {
 	End     string `json:"end"`
 }
 
+// ClaudeProjectRoot is one curated project-folder root the Claude
+// remote-session launcher (web-svc/claudesession) offers: a
+// human-readable label (matched against a launch request's "root"
+// field) and the filesystem path it corresponds to. See
+// docs/superpowers/specs/2026-08-09-claude-remote-sessions-design.md.
+type ClaudeProjectRoot struct {
+	Label string `json:"label"`
+	Path  string `json:"path"`
+}
+
 // WebConfig holds web-svc's settings: the single owner email allowed full
 // dashboard access, the frontend origin CORS must allow, and the base URLs
 // of the four services web-svc calls into. Unlike GmailConfig/
 // SystemMonitorConfig, every field here is required — web-svc has no
-// degraded "partially configured" mode.
+// degraded "partially configured" mode. ClaudeProjectRoots is required to
+// be non-empty, but unlike ObsidianRoot its entries' Path values are not
+// required to exist on disk at startup — a missing root is reported as
+// such per-request instead (see web-svc/claudesession.ListRoots).
 type WebConfig struct {
-	OwnerEmail        string `json:"owner_email"`
-	CORSAllowedOrigin string `json:"cors_allowed_origin"`
-	PerceptionSvcURL  string `json:"perception_svc_url"`
-	MemorySvcURL      string `json:"memory_svc_url"`
-	ThinkingSvcURL    string `json:"thinking_svc_url"`
-	ActionSvcURL      string `json:"action_svc_url"`
-	ObsidianRoot      string `json:"obsidian_root"`
+	OwnerEmail         string              `json:"owner_email"`
+	CORSAllowedOrigin  string              `json:"cors_allowed_origin"`
+	PerceptionSvcURL   string              `json:"perception_svc_url"`
+	MemorySvcURL       string              `json:"memory_svc_url"`
+	ThinkingSvcURL     string              `json:"thinking_svc_url"`
+	ActionSvcURL       string              `json:"action_svc_url"`
+	ObsidianRoot       string              `json:"obsidian_root"`
+	ClaudeProjectRoots []ClaudeProjectRoot `json:"claude_project_roots"`
 }
 
 // Load reads and parses the JSON config file at path. An empty or missing
