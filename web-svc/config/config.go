@@ -8,17 +8,18 @@ import (
 )
 
 type Config struct {
-	HTTPPort          string
-	SupabaseURL       string
-	SupabaseJWTSecret string
-	OwnerEmail        string
-	CORSAllowedOrigin string
-	PerceptionSvcURL  string
-	MemorySvcURL      string
-	ThinkingSvcURL    string
-	ActionSvcURL      string
-	SoulmanRoot       string
-	ObsidianRoot      string
+	HTTPPort           string
+	SupabaseURL        string
+	SupabaseJWTSecret  string
+	OwnerEmail         string
+	CORSAllowedOrigin  string
+	PerceptionSvcURL   string
+	MemorySvcURL       string
+	ThinkingSvcURL     string
+	ActionSvcURL       string
+	SoulmanRoot        string
+	ObsidianRoot       string
+	ClaudeProjectRoots []sharedconfig.ClaudeProjectRoot
 }
 
 func Load() (*Config, error) {
@@ -49,6 +50,9 @@ func Load() (*Config, error) {
 	if shared.Web.ObsidianRoot == "" {
 		return nil, fmt.Errorf("shared config %s has no web.obsidian_root configured", configPath)
 	}
+	if len(shared.Web.ClaudeProjectRoots) == 0 {
+		return nil, fmt.Errorf("shared config %s has no web.claude_project_roots configured", configPath)
+	}
 
 	supabaseURL := os.Getenv("SUPABASE_URL")
 	if supabaseURL == "" {
@@ -63,17 +67,18 @@ func Load() (*Config, error) {
 	jwtSecret := env("SUPABASE_JWT_SECRET", "")
 
 	return &Config{
-		HTTPPort:          env("HTTP_PORT", "9005"),
-		SupabaseURL:       supabaseURL,
-		SupabaseJWTSecret: jwtSecret,
-		OwnerEmail:        shared.Web.OwnerEmail,
-		CORSAllowedOrigin: shared.Web.CORSAllowedOrigin,
-		PerceptionSvcURL:  shared.Web.PerceptionSvcURL,
-		MemorySvcURL:      shared.Web.MemorySvcURL,
-		ThinkingSvcURL:    shared.Web.ThinkingSvcURL,
-		ActionSvcURL:      shared.Web.ActionSvcURL,
-		SoulmanRoot:       env("SOULMAN_ROOT", `C:\Users\Lenovo\soulman-dev`),
-		ObsidianRoot:      shared.Web.ObsidianRoot,
+		HTTPPort:           env("HTTP_PORT", "9005"),
+		SupabaseURL:        supabaseURL,
+		SupabaseJWTSecret:  jwtSecret,
+		OwnerEmail:         shared.Web.OwnerEmail,
+		CORSAllowedOrigin:  shared.Web.CORSAllowedOrigin,
+		PerceptionSvcURL:   shared.Web.PerceptionSvcURL,
+		MemorySvcURL:       shared.Web.MemorySvcURL,
+		ThinkingSvcURL:     shared.Web.ThinkingSvcURL,
+		ActionSvcURL:       shared.Web.ActionSvcURL,
+		SoulmanRoot:        env("SOULMAN_ROOT", `C:\Users\Lenovo\soulman-dev`),
+		ObsidianRoot:       shared.Web.ObsidianRoot,
+		ClaudeProjectRoots: shared.Web.ClaudeProjectRoots,
 	}, nil
 }
 

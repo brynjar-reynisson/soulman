@@ -25,7 +25,10 @@ const validConfigJSON = `{
     "memory_svc_url": "http://localhost:9012",
     "thinking_svc_url": "http://localhost:9013",
     "action_svc_url": "http://localhost:9014",
-    "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian"
+    "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian",
+    "claude_project_roots": [
+      {"label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian"}
+    ]
   }
 }`
 
@@ -255,5 +258,43 @@ func TestLoad_MissingObsidianRoot_ReturnsError(t *testing.T) {
 
 	if _, err := config.Load(); err == nil {
 		t.Fatal("Load() error = nil, want an error when web.obsidian_root is blank")
+	}
+}
+
+func TestLoad_PopulatesClaudeProjectRoots(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, validConfigJSON)
+	os.Setenv("CONFIG_PATH", path)
+	os.Setenv("SUPABASE_URL", "https://example.supabase.co")
+	os.Setenv("SUPABASE_JWT_SECRET", "shh")
+	defer os.Unsetenv("CONFIG_PATH")
+	defer os.Unsetenv("SUPABASE_URL")
+	defer os.Unsetenv("SUPABASE_JWT_SECRET")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if len(cfg.ClaudeProjectRoots) != 1 {
+		t.Fatalf("len(ClaudeProjectRoots) = %d, want 1", len(cfg.ClaudeProjectRoots))
+	}
+	if cfg.ClaudeProjectRoots[0].Label != "Obsidian" || cfg.ClaudeProjectRoots[0].Path != `C:\Users\Lenovo\Documents\obsidian` {
+		t.Errorf("ClaudeProjectRoots[0] = %+v", cfg.ClaudeProjectRoots[0])
+	}
+}
+
+func TestLoad_MissingClaudeProjectRoots_ReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	incomplete := `{"web": {"owner_email": "breynisson@gmail.com", "cors_allowed_origin": "http://localhost:5178", "perception_svc_url": "http://localhost:9011", "memory_svc_url": "http://localhost:9012", "thinking_svc_url": "http://localhost:9013", "action_svc_url": "http://localhost:9014", "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian", "claude_project_roots": []}}`
+	path := writeConfigFile(t, dir, incomplete)
+	os.Setenv("CONFIG_PATH", path)
+	os.Setenv("SUPABASE_URL", "https://example.supabase.co")
+	os.Setenv("SUPABASE_JWT_SECRET", "shh")
+	defer os.Unsetenv("CONFIG_PATH")
+	defer os.Unsetenv("SUPABASE_URL")
+	defer os.Unsetenv("SUPABASE_JWT_SECRET")
+
+	if _, err := config.Load(); err == nil {
+		t.Fatal("Load() error = nil, want an error when web.claude_project_roots is empty")
 	}
 }
