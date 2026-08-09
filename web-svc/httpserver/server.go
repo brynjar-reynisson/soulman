@@ -82,6 +82,7 @@ func (s *Server) buildRouter() chi.Router {
 		r.Post("/api/obsidian/file", s.obsidianFilePost)
 		r.Post("/api/obsidian/file/rename", s.obsidianFileRename)
 		r.Get("/api/claude/roots", s.claudeRoots)
+		r.Post("/api/claude/launch", s.claudeLaunch)
 	})
 
 	return r

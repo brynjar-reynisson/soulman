@@ -1,6 +1,7 @@
 package httpserver_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -60,6 +61,94 @@ func TestAPIClaudeRoots_NoToken_Returns401(t *testing.T) {
 	srv := httpserver.New("9005", cfg, auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/claude/roots", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestAPIClaudeLaunch_UnknownRoot_Returns400(t *testing.T) {
+	cfg := httpserver.Config{
+		CORSAllowedOrigin:  "http://localhost:5178",
+		ClaudeProjectRoots: []claudesession.Root{{Label: "Obsidian", Path: t.TempDir()}},
+	}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	reqBody, _ := json.Marshal(map[string]string{"root": "NotConfigured", "folder": "x", "sessionName": "x"})
+	req := httptest.NewRequest(http.MethodPost, "/api/claude/launch", bytes.NewReader(reqBody))
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAPIClaudeLaunch_InvalidFolder_Returns400(t *testing.T) {
+	cfg := httpserver.Config{
+		CORSAllowedOrigin:  "http://localhost:5178",
+		ClaudeProjectRoots: []claudesession.Root{{Label: "Obsidian", Path: t.TempDir()}},
+	}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	reqBody, _ := json.Marshal(map[string]string{"root": "Obsidian", "folder": "../etc", "sessionName": "x"})
+	req := httptest.NewRequest(http.MethodPost, "/api/claude/launch", bytes.NewReader(reqBody))
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAPIClaudeLaunch_MissingFolder_Returns404(t *testing.T) {
+	cfg := httpserver.Config{
+		CORSAllowedOrigin:  "http://localhost:5178",
+		ClaudeProjectRoots: []claudesession.Root{{Label: "Obsidian", Path: t.TempDir()}},
+	}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	reqBody, _ := json.Marshal(map[string]string{"root": "Obsidian", "folder": "does-not-exist", "sessionName": "x"})
+	req := httptest.NewRequest(http.MethodPost, "/api/claude/launch", bytes.NewReader(reqBody))
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAPIClaudeLaunch_InvalidBody_Returns400(t *testing.T) {
+	cfg := httpserver.Config{
+		CORSAllowedOrigin:  "http://localhost:5178",
+		ClaudeProjectRoots: []claudesession.Root{{Label: "Obsidian", Path: t.TempDir()}},
+	}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/claude/launch", bytes.NewReader([]byte("not json")))
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAPIClaudeLaunch_NoToken_Returns401(t *testing.T) {
+	cfg := httpserver.Config{CORSAllowedOrigin: "http://localhost:5178"}
+	srv := httpserver.New("9005", cfg, auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/claude/launch", bytes.NewReader([]byte("{}")))
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 
