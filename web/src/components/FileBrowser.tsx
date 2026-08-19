@@ -1,5 +1,5 @@
 // web/src/components/FileBrowser.tsx
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getAccessToken } from '../auth';
 import { listFiles, downloadFile, uploadFile, ApiError, type FileListing } from '../api';
 import { getParam, setParams } from '../urlState';
@@ -10,7 +10,9 @@ export function FileBrowser({ root }: { root: string }) {
   const [error, setError] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [conflictFile, setConflictFile] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -50,11 +52,14 @@ export function FileBrowser({ root }: { root: string }) {
 
   async function handleUpload(file: File, overwrite: boolean) {
     const token = await getAccessToken();
+    setUploadSuccess(null);
     try {
       await uploadFile(token, root, currentPath, file, overwrite);
       setConflictFile(null);
       setPendingFile(null);
       setError(null);
+      setUploadSuccess(file.name);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       setRefreshKey((k) => k + 1);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -112,10 +117,12 @@ export function FileBrowser({ root }: { root: string }) {
       )}
       <div className="mt-4">
         <input
+          ref={fileInputRef}
           type="file"
           onChange={(e) => {
             setPendingFile(e.target.files?.[0] ?? null);
             setConflictFile(null);
+            setUploadSuccess(null);
           }}
         />
         <button
@@ -125,6 +132,9 @@ export function FileBrowser({ root }: { root: string }) {
         >
           Upload
         </button>
+        {uploadSuccess && (
+          <p className="mt-2 text-sm text-green-600">&quot;{uploadSuccess}&quot; uploaded successfully.</p>
+        )}
         {conflictFile && (
           <div className="mt-2 text-sm text-red-600">
             &quot;{conflictFile}&quot; already exists —{' '}

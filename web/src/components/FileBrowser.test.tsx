@@ -90,6 +90,38 @@ describe('FileBrowser', () => {
     expect(mockListFiles).toHaveBeenLastCalledWith('tok-abc', 'Documents', 'Taxes');
   });
 
+  it('shows a success message and resets the file input after a successful upload', async () => {
+    mockListFiles.mockResolvedValue({ folders: [], files: [] });
+    mockUploadFile.mockResolvedValueOnce(undefined);
+    const { FileBrowser } = await import('./FileBrowser');
+    render(<FileBrowser root="Documents" />);
+
+    const file = new File(['hello'], 'note.txt', { type: 'text/plain' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await userEvent.upload(input, file);
+    await userEvent.click(await screen.findByText('Upload'));
+
+    expect(await screen.findByText(/"note.txt" uploaded successfully/i)).toBeInTheDocument();
+    expect(input.value).toBe('');
+  });
+
+  it('clears a stale success message once a new file is chosen', async () => {
+    mockListFiles.mockResolvedValue({ folders: [], files: [] });
+    mockUploadFile.mockResolvedValueOnce(undefined);
+    const { FileBrowser } = await import('./FileBrowser');
+    render(<FileBrowser root="Documents" />);
+
+    const file = new File(['hello'], 'note.txt', { type: 'text/plain' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await userEvent.upload(input, file);
+    await userEvent.click(await screen.findByText('Upload'));
+    await screen.findByText(/"note.txt" uploaded successfully/i);
+
+    await userEvent.upload(input, new File(['x'], 'other.txt', { type: 'text/plain' }));
+
+    expect(screen.queryByText(/uploaded successfully/i)).not.toBeInTheDocument();
+  });
+
   it('resets currentPath when remounted with a different root (simulates a root switch via key change)', async () => {
     mockListFiles
       .mockResolvedValueOnce({ folders: ['Taxes'], files: [] })
