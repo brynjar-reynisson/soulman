@@ -13,6 +13,8 @@ import {
   renameObsidianFile,
   getClaudeRoots,
   launchClaudeSession,
+  getFileBrowserRoots,
+  listFiles,
   ApiError,
 } from './api';
 
@@ -226,5 +228,41 @@ describe('launchClaudeSession', () => {
     mockFetch.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
 
     await expect(launchClaudeSession('tok-abc', 'Obsidian', 'soulman', 'x')).rejects.toThrow(ApiError);
+  });
+});
+
+describe('getFileBrowserRoots', () => {
+  it('fetches /api/files/roots with the auth header', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ roots: [{ label: 'Documents', path: 'C:\\Users\\Lenovo\\Documents', exists: true }] }),
+    });
+
+    const result = await getFileBrowserRoots('tok-abc');
+
+    expect(result.roots[0].label).toBe('Documents');
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/files/roots');
+    expect(options.headers).toEqual({ Authorization: 'Bearer tok-abc' });
+  });
+});
+
+describe('listFiles', () => {
+  it('fetches /api/files/list with encoded root and path query params', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ folders: ['Taxes'], files: [{ name: 'note.txt', size: 42 }] }),
+    });
+
+    const result = await listFiles('tok-abc', 'Documents', 'Taxes/2025');
+
+    expect(result.folders).toEqual(['Taxes']);
+    expect(result.files[0]).toEqual({ name: 'note.txt', size: 42 });
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/files/list?root=Documents&path=Taxes%2F2025');
   });
 });

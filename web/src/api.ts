@@ -163,3 +163,33 @@ export const launchClaudeSession = (
   folder: string,
   sessionName: string,
 ): Promise<void> => mutateJSON('POST', '/api/claude/launch', token, { root, folder, sessionName });
+
+export interface FileBrowserRootListing {
+  label: string;
+  path: string;
+  exists: boolean;
+}
+
+export interface FileBrowserRoots {
+  roots: FileBrowserRootListing[];
+}
+
+export interface FileEntry {
+  name: string;
+  size: number;
+}
+
+export interface FileListing {
+  folders: string[];
+  files: FileEntry[];
+}
+
+export const getFileBrowserRoots = (token: string | null): Promise<FileBrowserRoots> =>
+  getJSON('/api/files/roots', token);
+
+export const listFiles = (
+  token: string | null,
+  root: string,
+  path: string,
+): Promise<FileListing> =>
+  getJSON(`/api/files/list?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}`, token);
