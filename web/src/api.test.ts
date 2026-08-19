@@ -15,6 +15,7 @@ import {
   launchClaudeSession,
   getFileBrowserRoots,
   listFiles,
+  downloadFile,
   ApiError,
 } from './api';
 
@@ -264,5 +265,35 @@ describe('listFiles', () => {
     expect(result.files[0]).toEqual({ name: 'note.txt', size: 42 });
     const [url] = mockFetch.mock.calls[0];
     expect(url).toBe('/api/files/list?root=Documents&path=Taxes%2F2025');
+  });
+});
+
+describe('downloadFile', () => {
+  it('fetches the file and triggers a browser download via a synthetic anchor', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    const blob = new Blob(['hello'], { type: 'text/plain' });
+    mockFetch.mockResolvedValue({ ok: true, status: 200, blob: async () => blob });
+
+    const createObjectURL = vi.fn().mockReturnValue('blob:mock-url');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL });
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    await downloadFile('tok-abc', 'Documents', 'Taxes', '2025-return.pdf');
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/files/download?root=Documents&path=Taxes&file=2025-return.pdf');
+    expect(createObjectURL).toHaveBeenCalledWith(blob);
+    expect(clickSpy).toHaveBeenCalled();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+
+    clickSpy.mockRestore();
+  });
+
+  it('throws ApiError when the response is not ok', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: false, status: 404 });
+
+    await expect(downloadFile('tok-abc', 'Documents', '', 'missing.pdf')).rejects.toThrow(ApiError);
   });
 });

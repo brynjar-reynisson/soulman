@@ -193,3 +193,25 @@ export const listFiles = (
   path: string,
 ): Promise<FileListing> =>
   getJSON(`/api/files/list?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}`, token);
+
+export async function downloadFile(
+  token: string | null,
+  root: string,
+  path: string,
+  file: string,
+): Promise<void> {
+  const response = await fetch(
+    `/api/files/download?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}`,
+    { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+  );
+  if (!response.ok) {
+    throw new ApiError(response.status, `download failed (${response.status})`);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = file;
+  a.click();
+  URL.revokeObjectURL(url);
+}
