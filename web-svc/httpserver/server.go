@@ -86,6 +86,7 @@ func (s *Server) buildRouter() chi.Router {
 		r.Get("/api/claude/roots", s.claudeRoots)
 		r.Post("/api/claude/launch", s.claudeLaunch)
 		r.Get("/api/files/roots", s.filesRoots)
+		r.Get("/api/files/list", s.filesList)
 	})
 
 	return r

@@ -45,3 +45,26 @@ func writeFileBrowserError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusInternalServerError, "internal error")
 	}
 }
+
+type fileEntryResponse struct {
+	Name string `json:"name"`
+	Size int64  `json:"size"`
+}
+
+func (s *Server) filesList(w http.ResponseWriter, r *http.Request) {
+	root, ok := findFileBrowserRoot(s.cfg.FileBrowserRoots, r.URL.Query().Get("root"))
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "unknown root")
+		return
+	}
+	folders, files, err := filebrowser.List(root, r.URL.Query().Get("path"))
+	if err != nil {
+		writeFileBrowserError(w, err)
+		return
+	}
+	resp := make([]fileEntryResponse, len(files))
+	for i, f := range files {
+		resp[i] = fileEntryResponse{Name: f.Name, Size: f.Size}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"folders": folders, "files": resp})
+}
