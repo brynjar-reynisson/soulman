@@ -3,7 +3,9 @@ package httpserver
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -60,7 +62,7 @@ func (s *Server) Start() error {
 
 func (s *Server) buildRouter() chi.Router {
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{s.cfg.CORSAllowedOrigin},
@@ -97,6 +99,58 @@ func (s *Server) buildRouter() chi.Router {
 	r.Get("/dl/{token}", s.shareDownload)
 
 	return r
+}
+
+// shareDownloadPrefix is the URL prefix of the one route in this service
+// whose path is itself a credential — see requestLogger.
+const shareDownloadPrefix = "/dl/"
+
+// redactedSharePath replaces a share link's real path in the request log.
+const redactedSharePath = "/dl/<redacted>"
+
+// requestLogger logs every request, but routes share-link downloads away
+// from chi's middleware.Logger: a /dl/{token} URL *is* the bearer
+// capability (no other credential is needed to fetch the file), and
+// middleware.Logger writes the full path verbatim into web-svc-startup.log,
+// which is never rotated. Everything else keeps chi's logger unchanged.
+//
+// The split has to happen here, ahead of chi's logger, because
+// middleware.RequestLogger snapshots the request path into its log entry
+// *before* calling the next handler — there is no later hook that can
+// change what it prints. Redacting by mutating r.URL.Path in a preceding
+// middleware isn't an option either: chi routes on the mutated path, so
+// shareDownload's chi.URLParam(r, "token") would receive the placeholder
+// instead of the real token.
+func requestLogger(next http.Handler) http.Handler {
+	chiLogged := middleware.Logger(next)
+	redactedLogged := shareDownloadLogger(next)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, shareDownloadPrefix) {
+			redactedLogged.ServeHTTP(w, r)
+			return
+		}
+		chiLogged.ServeHTTP(w, r)
+	})
+}
+
+// shareDownloadLogger logs method, status, response size and duration for a
+// share-link download against a redacted path, via log/slog (this repo's
+// standard logger) rather than chi's stdlib-log formatter.
+func shareDownloadLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		start := time.Now()
+		defer func() {
+			slog.Info("share link request",
+				"method", r.Method,
+				"path", redactedSharePath,
+				"status", ww.Status(),
+				"bytes", ww.BytesWritten(),
+				"duration", time.Since(start).String(),
+			)
+		}()
+		next.ServeHTTP(ww, r)
+	})
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {

@@ -30,8 +30,13 @@ type payload struct {
 	Exp  int64  `json:"exp"` // unix seconds
 }
 
-// Issue creates a token for one file, valid for ttl from now.
+// Issue creates a token for one file, valid for ttl from now. An empty
+// secret yields no token at all (empty string, zero time) — see Verify for
+// why that case is refused rather than signed with an empty HMAC key.
 func Issue(secret []byte, root, path, file string, ttl time.Duration) (token string, expiresAt time.Time) {
+	if len(secret) == 0 {
+		return "", time.Time{}
+	}
 	expiresAt = time.Now().Add(ttl)
 	body, _ := json.Marshal(payload{Root: root, Path: path, File: file, Exp: expiresAt.Unix()})
 	payloadB64 := base64.RawURLEncoding.EncodeToString(body)
@@ -43,7 +48,21 @@ func Issue(secret []byte, root, path, file string, ttl time.Duration) (token str
 // returns the embedded root/path/file. The signature is checked before the
 // payload is ever decoded — an attacker cannot get JSON-parsed until they
 // hold a validly-signed token.
+//
+// An empty secret rejects everything, unconditionally. HMAC-SHA256 is
+// perfectly happy with an empty key, so without this guard a caller that
+// somehow reached Verify with no secret configured would fail *open*:
+// anyone could compute the same empty-key HMAC and forge a valid token for
+// any (root, path, file) inside the configured file-browser roots, on this
+// service's only unauthenticated route. Today web-svc/main.go always
+// generates 32 crypto/rand bytes before constructing httpserver.Config, so
+// this is unreachable — the guard lives here, in the actual security
+// boundary, so a future refactor of main.go can't quietly turn it into a
+// live bypass.
 func Verify(secret []byte, token string) (root, path, file string, err error) {
+	if len(secret) == 0 {
+		return "", "", "", ErrInvalid
+	}
 	dot := strings.IndexByte(token, '.')
 	if dot < 0 {
 		return "", "", "", ErrInvalid

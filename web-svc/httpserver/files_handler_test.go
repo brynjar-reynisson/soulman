@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -611,5 +612,100 @@ func TestShareDownload_FileDeletedSinceIssue_Returns404(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// captureSlog points the default slog logger at a buffer for the duration
+// of one test, restoring the previous logger afterwards.
+func captureSlog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	return &buf
+}
+
+func TestShareDownload_RequestLogNeverContainsTheToken(t *testing.T) {
+	// A /dl/{token} URL is the whole credential — logging it verbatim into
+	// the never-rotated web-svc-startup.log would hand a live capability to
+	// anyone who ever sees that file.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("hello world"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	secret := []byte("test-secret-32-bytes-long-abcdef")
+	cfg := httpserver.Config{
+		CORSAllowedOrigin: "http://localhost:5178",
+		FileBrowserRoots:  []filebrowser.Root{{Label: "Documents", Path: dir}},
+		ShareLinkSecret:   secret,
+		ShareLinkTTL:      time.Hour,
+	}
+	srv := httpserver.New("9005", cfg, auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail))
+	token, _ := sharelink.Issue(secret, "Documents", "", "note.txt", time.Hour)
+
+	logs := captureSlog(t)
+	req := httptest.NewRequest(http.MethodGet, "/dl/"+token, nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body=%s", rec.Code, rec.Body.String())
+	}
+	logged := logs.String()
+	if strings.Contains(logged, token) {
+		t.Errorf("request log leaked the share token:\n%s", logged)
+	}
+	// Still logged, just redacted — dropping the line entirely would trade
+	// one problem for a blind spot on the only unauthenticated route.
+	if !strings.Contains(logged, "/dl/<redacted>") {
+		t.Errorf("request log missing the redacted path:\n%s", logged)
+	}
+	if !strings.Contains(logged, "method=GET") || !strings.Contains(logged, "status=200") {
+		t.Errorf("request log missing method/status:\n%s", logged)
+	}
+}
+
+func TestShareDownload_InvalidTokenIsStillLoggedRedacted(t *testing.T) {
+	cfg := httpserver.Config{
+		CORSAllowedOrigin: "http://localhost:5178",
+		FileBrowserRoots:  []filebrowser.Root{{Label: "Documents", Path: t.TempDir()}},
+		ShareLinkSecret:   []byte("test-secret-32-bytes-long-abcdef"),
+	}
+	srv := httpserver.New("9005", cfg, auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail))
+
+	logs := captureSlog(t)
+	req := httptest.NewRequest(http.MethodGet, "/dl/bogus.token", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+	logged := logs.String()
+	if strings.Contains(logged, "bogus.token") {
+		t.Errorf("request log leaked the attempted token:\n%s", logged)
+	}
+	if !strings.Contains(logged, "/dl/<redacted>") || !strings.Contains(logged, "status=404") {
+		t.Errorf("request log missing the redacted 404 entry:\n%s", logged)
+	}
+}
+
+func TestNonShareRoutesAreNotRoutedThroughTheRedactingLogger(t *testing.T) {
+	// Every other route keeps chi's middleware.Logger untouched; nothing
+	// about them should reach the share-link slog path.
+	cfg := httpserver.Config{CORSAllowedOrigin: "http://localhost:5178"}
+	srv := httpserver.New("9005", cfg, auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail))
+
+	logs := captureSlog(t)
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if strings.Contains(logs.String(), "/dl/<redacted>") {
+		t.Errorf("non-share route went through the share-link logger:\n%s", logs.String())
 	}
 }
