@@ -247,6 +247,12 @@ func (s *Server) filesShare(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// shareLinkInvalidMessage is used for every "invalid" cause (bad
+// signature, unknown root, missing file) — deliberately identical across
+// all of them so a link's specific failure reason can't be enumerated by
+// an attacker. Defined once so future call sites can't drift from it.
+const shareLinkInvalidMessage = "This link is invalid or the file is no longer available."
+
 func (s *Server) shareDownload(w http.ResponseWriter, r *http.Request) {
 	rootLabel, relPath, filename, err := sharelink.Verify(s.cfg.ShareLinkSecret, chi.URLParam(r, "token"))
 	if errors.Is(err, sharelink.ErrExpired) {
@@ -254,17 +260,17 @@ func (s *Server) shareDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeShareLinkError(w, http.StatusNotFound, "This link is invalid or the file is no longer available.")
+		writeShareLinkError(w, http.StatusNotFound, shareLinkInvalidMessage)
 		return
 	}
 	root, ok := findFileBrowserRoot(s.cfg.FileBrowserRoots, rootLabel)
 	if !ok {
-		writeShareLinkError(w, http.StatusNotFound, "This link is invalid or the file is no longer available.")
+		writeShareLinkError(w, http.StatusNotFound, shareLinkInvalidMessage)
 		return
 	}
 	absPath, err := filebrowser.ResolveFile(root, relPath, filename)
 	if err != nil {
-		writeShareLinkError(w, http.StatusNotFound, "This link is invalid or the file is no longer available.")
+		writeShareLinkError(w, http.StatusNotFound, shareLinkInvalidMessage)
 		return
 	}
 	serveFileDownload(w, r, absPath, filename)
