@@ -84,3 +84,44 @@ func (s *Server) filesDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	http.ServeFile(w, r, absPath)
 }
+
+// maxUploadBytes caps a single upload's request body. Hardcoded rather
+// than added to the config schema — bump here if 200MB turns out wrong
+// (YAGNI, same posture as obsidian's no-size-cap call, just starting
+// from *some* cap instead of none given this is binary/large-file
+// upload rather than markdown notes).
+const maxUploadBytes = 200 << 20 // 200MB
+
+func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request) {
+	root, ok := findFileBrowserRoot(s.cfg.FileBrowserRoots, r.URL.Query().Get("root"))
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "unknown root")
+		return
+	}
+	overwrite := r.URL.Query().Get("overwrite") == "true"
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "upload too large")
+			return
+		}
+		writeJSONError(w, http.StatusBadRequest, "invalid multipart body")
+		return
+	}
+	defer r.MultipartForm.RemoveAll()
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing file field")
+		return
+	}
+	defer file.Close()
+
+	if err := filebrowser.Save(root, r.URL.Query().Get("path"), header.Filename, file, overwrite); err != nil {
+		writeFileBrowserError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}

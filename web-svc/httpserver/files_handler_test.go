@@ -2,7 +2,10 @@
 package httpserver_test
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -185,5 +188,129 @@ func TestAPIFilesDownload_MissingFile_Returns404(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func newUploadRequest(t *testing.T, url, fieldName, filename string, content []byte) *http.Request {
+	t.Helper()
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	part, err := mw.CreateFormFile(fieldName, filename)
+	if err != nil {
+		t.Fatalf("CreateFormFile: %v", err)
+	}
+	if _, err := part.Write(content); err != nil {
+		t.Fatalf("writing multipart content: %v", err)
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatalf("closing multipart writer: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, url, &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	return req
+}
+
+func TestAPIFilesUpload_NewFile_Returns200AndWritesContent(t *testing.T) {
+	dir := t.TempDir()
+	cfg := httpserver.Config{
+		CORSAllowedOrigin: "http://localhost:5178",
+		FileBrowserRoots:  []filebrowser.Root{{Label: "Documents", Path: dir}},
+	}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	req := newUploadRequest(t, "/api/files/upload?root=Documents&path=&overwrite=false", "file", "note.txt", []byte("hello"))
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body=%s", rec.Code, rec.Body.String())
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "note.txt"))
+	if err != nil {
+		t.Fatalf("reading uploaded file: %v", err)
+	}
+	if string(got) != "hello" {
+		t.Errorf("content = %q, want hello", got)
+	}
+}
+
+func TestAPIFilesUpload_ExistingFileNoOverwrite_Returns409(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("original"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	cfg := httpserver.Config{
+		CORSAllowedOrigin: "http://localhost:5178",
+		FileBrowserRoots:  []filebrowser.Root{{Label: "Documents", Path: dir}},
+	}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	req := newUploadRequest(t, "/api/files/upload?root=Documents&path=&overwrite=false", "file", "note.txt", []byte("new"))
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAPIFilesUpload_OversizedBody_Returns413(t *testing.T) {
+	dir := t.TempDir()
+	cfg := httpserver.Config{
+		CORSAllowedOrigin: "http://localhost:5178",
+		FileBrowserRoots:  []filebrowser.Root{{Label: "Documents", Path: dir}},
+	}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	// Streams a body one byte over the 200MB cap via io.Pipe, so the test
+	// doesn't have to hold the whole oversized payload in memory at once.
+	pr, pw := io.Pipe()
+	mw := multipart.NewWriter(pw)
+	go func() {
+		part, err := mw.CreateFormFile("file", "huge.bin")
+		if err == nil {
+			_, _ = io.Copy(part, io.LimitReader(zeroReader{}, 200<<20+1))
+		}
+		mw.Close()
+		pw.Close()
+	}()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/files/upload?root=Documents&path=&overwrite=false", pr)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+type zeroReader struct{}
+
+func (zeroReader) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = 0
+	}
+	return len(p), nil
+}
+
+func TestAPIFilesUpload_UnknownRoot_Returns400(t *testing.T) {
+	cfg := httpserver.Config{CORSAllowedOrigin: "http://localhost:5178"}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	req := newUploadRequest(t, "/api/files/upload?root=NoSuchRoot&path=&overwrite=false", "file", "note.txt", []byte("hi"))
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400, body=%s", rec.Code, rec.Body.String())
 	}
 }
