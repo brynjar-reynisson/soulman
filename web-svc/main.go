@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -32,6 +33,12 @@ func main() {
 		fileBrowserRoots[i] = filebrowser.Root{Label: r.Label, Path: r.Path}
 	}
 
+	shareLinkSecret := make([]byte, 32)
+	if _, err := rand.Read(shareLinkSecret); err != nil {
+		slog.Error("generating share link secret failed", "error", err)
+		os.Exit(1)
+	}
+
 	srv := httpserver.New(cfg.HTTPPort, httpserver.Config{
 		CORSAllowedOrigin:  cfg.CORSAllowedOrigin,
 		PerceptionSvcURL:   cfg.PerceptionSvcURL,
@@ -42,6 +49,8 @@ func main() {
 		ObsidianRoot:       cfg.ObsidianRoot,
 		ClaudeProjectRoots: claudeRoots,
 		FileBrowserRoots:   fileBrowserRoots,
+		ShareLinkSecret:    shareLinkSecret,
+		ShareLinkTTL:       cfg.ShareLinkTTL,
 	}, verifier)
 
 	go func() {

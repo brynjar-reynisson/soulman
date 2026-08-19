@@ -86,6 +86,14 @@ func (s *Server) filesDownload(w http.ResponseWriter, r *http.Request) {
 		writeFileBrowserError(w, err)
 		return
 	}
+	serveFileDownload(w, r, absPath, filename)
+}
+
+// serveFileDownload streams absPath as an attachment named filename,
+// applying the same Content-Disposition/Cache-Control/UTF-8-BOM treatment
+// regardless of which route reached it — the owner-JWT-gated
+// /api/files/download, or the token-gated /dl/{token} share link.
+func serveFileDownload(w http.ResponseWriter, r *http.Request, absPath, filename string) {
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	// This must never be served from a browser or edge (Cloudflare tunnel)
 	// cache: a file's content can change between browses, and — the

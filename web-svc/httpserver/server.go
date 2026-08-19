@@ -29,6 +29,8 @@ type Config struct {
 	ObsidianRoot       string
 	ClaudeProjectRoots []claudesession.Root
 	FileBrowserRoots   []filebrowser.Root
+	ShareLinkSecret    []byte
+	ShareLinkTTL       time.Duration
 }
 
 type Server struct {
