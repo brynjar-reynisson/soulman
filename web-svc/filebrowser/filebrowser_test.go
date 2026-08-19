@@ -129,3 +129,51 @@ func mustWriteFile(t *testing.T, path string, content []byte) {
 		t.Fatalf("WriteFile(%s): %v", path, err)
 	}
 }
+
+func TestResolveFile_ExistingFile_ReturnsAbsolutePath(t *testing.T) {
+	dir := t.TempDir()
+	mustMkdir(t, filepath.Join(dir, "Taxes"))
+	mustWriteFile(t, filepath.Join(dir, "Taxes", "return.pdf"), []byte("pdf-bytes"))
+	root := filebrowser.Root{Label: "Documents", Path: dir}
+
+	path, err := filebrowser.ResolveFile(root, "Taxes", "return.pdf")
+	if err != nil {
+		t.Fatalf("ResolveFile() error = %v", err)
+	}
+	want := filepath.Join(dir, "Taxes", "return.pdf")
+	if path != want {
+		t.Errorf("ResolveFile() = %q, want %q", path, want)
+	}
+}
+
+func TestResolveFile_MissingFile_ReturnsErrNotFound(t *testing.T) {
+	dir := t.TempDir()
+	mustMkdir(t, filepath.Join(dir, "Taxes"))
+	root := filebrowser.Root{Label: "Documents", Path: dir}
+
+	_, err := filebrowser.ResolveFile(root, "Taxes", "missing.pdf")
+	if !errors.Is(err, filebrowser.ErrNotFound) {
+		t.Errorf("ResolveFile() error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestResolveFile_InvalidFilenameSegment_ReturnsErrInvalidName(t *testing.T) {
+	root := filebrowser.Root{Label: "Documents", Path: t.TempDir()}
+	for _, name := range []string{"..", `a\b`, "a/b", ""} {
+		_, err := filebrowser.ResolveFile(root, "", name)
+		if !errors.Is(err, filebrowser.ErrInvalidName) {
+			t.Errorf("ResolveFile(%q) error = %v, want ErrInvalidName", name, err)
+		}
+	}
+}
+
+func TestResolveFile_TargetIsDirectory_ReturnsErrNotFound(t *testing.T) {
+	dir := t.TempDir()
+	mustMkdir(t, filepath.Join(dir, "Taxes"))
+	root := filebrowser.Root{Label: "Documents", Path: dir}
+
+	_, err := filebrowser.ResolveFile(root, "", "Taxes")
+	if !errors.Is(err, filebrowser.ErrNotFound) {
+		t.Errorf("ResolveFile() error = %v, want ErrNotFound for a directory target", err)
+	}
+}

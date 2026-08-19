@@ -137,3 +137,31 @@ func List(root Root, relPath string) (folders []string, files []FileInfo, err er
 	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
 	return folders, files, nil
 }
+
+// ResolveFile validates relPath (a folder) and filename (a single path
+// segment) and returns the file's absolute path for a caller to stream.
+// Returns ErrNotFound if it doesn't exist or is a directory.
+func ResolveFile(root Root, relPath, filename string) (string, error) {
+	dir, err := resolveDir(root, relPath)
+	if err != nil {
+		return "", err
+	}
+	if !validSegment(filename) {
+		return "", ErrInvalidName
+	}
+	path := filepath.Join(dir, filename)
+	if !isWithin(dir, path) {
+		return "", ErrInvalidName
+	}
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("filebrowser: stat %s: %w", path, err)
+	}
+	if info.IsDir() {
+		return "", ErrNotFound
+	}
+	return path, nil
+}
