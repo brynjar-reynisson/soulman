@@ -59,10 +59,13 @@ export function FileBrowser({ root }: { root: string }) {
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setConflictFile(file.name);
+        setError(null);
       } else if (err instanceof ApiError && err.status === 413) {
         setError('Upload exceeds the 200MB limit');
+        setConflictFile(null);
       } else {
         setError('Upload failed');
+        setConflictFile(null);
       }
     }
   }
@@ -108,7 +111,13 @@ export function FileBrowser({ root }: { root: string }) {
         </ul>
       )}
       <div className="mt-4">
-        <input type="file" onChange={(e) => setPendingFile(e.target.files?.[0] ?? null)} />
+        <input
+          type="file"
+          onChange={(e) => {
+            setPendingFile(e.target.files?.[0] ?? null);
+            setConflictFile(null);
+          }}
+        />
         <button
           disabled={!pendingFile}
           onClick={() => pendingFile && handleUpload(pendingFile, false)}

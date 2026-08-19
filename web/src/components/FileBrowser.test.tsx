@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '../api';
+import { setParams } from '../urlState';
 
 vi.mock('../auth', () => ({ getAccessToken: vi.fn().mockResolvedValue('tok-abc') }));
 
@@ -67,5 +68,47 @@ describe('FileBrowser', () => {
     await userEvent.click(screen.getByText('replace?'));
 
     expect(mockUploadFile).toHaveBeenLastCalledWith('tok-abc', 'Documents', '', file, true);
+  });
+
+  it('clicking a breadcrumb segment truncates the path to that depth', async () => {
+    mockListFiles
+      .mockResolvedValueOnce({ folders: ['Taxes'], files: [] })
+      .mockResolvedValueOnce({ folders: ['2025'], files: [] })
+      .mockResolvedValueOnce({ folders: [], files: [{ name: 'deep.txt', size: 1 }] })
+      .mockResolvedValueOnce({ folders: ['2025'], files: [] });
+    const { FileBrowser } = await import('./FileBrowser');
+    render(<FileBrowser root="Documents" />);
+
+    await userEvent.click(await screen.findByText('Taxes'));
+    await userEvent.click(await screen.findByText('2025'));
+    await screen.findByText('deep.txt');
+    expect(mockListFiles).toHaveBeenLastCalledWith('tok-abc', 'Documents', 'Taxes/2025');
+
+    await userEvent.click(screen.getByText('Taxes'));
+
+    expect(await screen.findByText('2025')).toBeInTheDocument();
+    expect(mockListFiles).toHaveBeenLastCalledWith('tok-abc', 'Documents', 'Taxes');
+  });
+
+  it('resets currentPath when remounted with a different root (simulates a root switch via key change)', async () => {
+    mockListFiles
+      .mockResolvedValueOnce({ folders: ['Taxes'], files: [] })
+      .mockResolvedValueOnce({ folders: [], files: [{ name: 'x.txt', size: 1 }] })
+      .mockResolvedValueOnce({ folders: [], files: [{ name: 'y.txt', size: 2 }] });
+    const { FileBrowser } = await import('./FileBrowser');
+    const { rerender } = render(<FileBrowser key="Documents" root="Documents" />);
+    await userEvent.click(await screen.findByText('Taxes'));
+    await screen.findByText('x.txt');
+
+    // Mirrors what FileRootList's root-switch handler actually does before
+    // the remount: clear filePath in the URL so the fresh instance's lazy
+    // currentPath initializer doesn't pick up the previous root's drilled-down
+    // path. Without this, the URL (a jsdom global that outlives `rerender`)
+    // would still carry the old filePath, defeating the point of the test.
+    setParams({ fileRoot: 'Downloads', filePath: null });
+    rerender(<FileBrowser key="Downloads" root="Downloads" />);
+
+    expect(await screen.findByText('y.txt')).toBeInTheDocument();
+    expect(mockListFiles).toHaveBeenLastCalledWith('tok-abc', 'Downloads', '');
   });
 });

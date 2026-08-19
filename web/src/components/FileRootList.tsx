@@ -54,7 +54,7 @@ export function FileRootList() {
       )}
       {selectedRoot && (
         <div className="mt-4">
-          <FileBrowser root={selectedRoot} />
+          <FileBrowser key={selectedRoot} root={selectedRoot} />
         </div>
       )}
     </div>

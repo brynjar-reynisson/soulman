@@ -289,6 +289,7 @@ describe('downloadFile', () => {
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
 
     clickSpy.mockRestore();
+    vi.unstubAllGlobals();
   });
 
   it('throws ApiError when the response is not ok', async () => {
