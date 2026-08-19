@@ -1,9 +1,14 @@
 package httpserver
 
 import (
+	"bytes"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"strconv"
+	"strings"
 
 	"soulman/web-svc/filebrowser"
 )
@@ -82,7 +87,83 @@ func (s *Server) filesDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+
+	needsBOM, err := isBOMlessUTF8Text(absPath)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if needsBOM {
+		serveWithUTF8BOM(w, absPath)
+		return
+	}
 	http.ServeFile(w, r, absPath)
+}
+
+var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
+
+// isBOMlessUTF8Text sniffs a file the same way http.ServeFile would (first
+// 512 bytes) and reports whether it's UTF-8 text containing at least one
+// non-ASCII byte, with no BOM already present. A real download of an
+// Icelandic-language .txt file confirmed this matters: several Android
+// text-viewer apps misdetect BOM-less UTF-8 as a legacy codepage and
+// render accented characters as mojibake, even though the bytes
+// themselves — and the served Content-Type — are already correctly
+// UTF-8; a leading BOM is what those viewers actually key off of.
+// Pure-ASCII text is left untouched (valid under either interpretation,
+// so there's nothing to disambiguate and no reason to change what gets
+// served), as are binary files and text that already carries a BOM.
+func isBOMlessUTF8Text(path string) (bool, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	buf := make([]byte, 512)
+	n, err := f.Read(buf)
+	if err != nil && err != io.EOF {
+		return false, err
+	}
+	buf = buf[:n]
+	if bytes.HasPrefix(buf, utf8BOM) {
+		return false, nil
+	}
+	if !hasNonASCIIByte(buf) {
+		return false, nil
+	}
+	return strings.HasPrefix(http.DetectContentType(buf), "text/plain"), nil
+}
+
+func hasNonASCIIByte(b []byte) bool {
+	for _, c := range b {
+		if c >= 0x80 {
+			return true
+		}
+	}
+	return false
+}
+
+// serveWithUTF8BOM streams path with a UTF-8 BOM prepended. This bypasses
+// http.ServeFile's Range/conditional-GET support — an accepted tradeoff
+// for the small text files this path actually triggers on; binary files
+// and already-BOM'd text (the cases that matter for large/resumable
+// downloads) still go through http.ServeFile in filesDownload above.
+func serveWithUTF8BOM(w http.ResponseWriter, path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Length", strconv.FormatInt(info.Size()+int64(len(utf8BOM)), 10))
+	w.Write(utf8BOM)
+	io.Copy(w, f)
 }
 
 // maxUploadBytes caps a single upload's request body. Hardcoded rather

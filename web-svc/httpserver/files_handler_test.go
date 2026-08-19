@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"soulman/web-svc/auth"
@@ -169,6 +170,123 @@ func TestAPIFilesDownload_ServesFileBytes(t *testing.T) {
 	}
 	if got := rec.Header().Get("Content-Disposition"); got != `attachment; filename="note.txt"` {
 		t.Errorf("Content-Disposition = %q", got)
+	}
+}
+
+func TestAPIFilesDownload_NonASCIIText_PrependsUTF8BOM(t *testing.T) {
+	dir := t.TempDir()
+	content := "Sæng, kodda — þægilegt á 90 cm rúm"
+	if err := os.WriteFile(filepath.Join(dir, "checklist.txt"), []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	cfg := httpserver.Config{
+		CORSAllowedOrigin: "http://localhost:5178",
+		FileBrowserRoots:  []filebrowser.Root{{Label: "Documents", Path: dir}},
+	}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/files/download?root=Documents&path=&file=checklist.txt", nil)
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.Bytes()
+	wantBOM := []byte{0xEF, 0xBB, 0xBF}
+	if len(body) < 3 || string(body[:3]) != string(wantBOM) {
+		t.Fatalf("body does not start with a UTF-8 BOM: %x", body[:min(3, len(body))])
+	}
+	if string(body[3:]) != content {
+		t.Errorf("body after BOM = %q, want %q", body[3:], content)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
+		t.Errorf("Content-Type = %q, want text/plain; charset=utf-8", got)
+	}
+	if got := rec.Header().Get("Content-Length"); got != strconv.Itoa(len(content)+3) {
+		t.Errorf("Content-Length = %q, want %d", got, len(content)+3)
+	}
+}
+
+func TestAPIFilesDownload_ASCIIOnlyText_NoBOMAdded(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("plain ascii, no accents here"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	cfg := httpserver.Config{
+		CORSAllowedOrigin: "http://localhost:5178",
+		FileBrowserRoots:  []filebrowser.Root{{Label: "Documents", Path: dir}},
+	}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/files/download?root=Documents&path=&file=note.txt", nil)
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body=%s", rec.Code, rec.Body.String())
+	}
+	if rec.Body.String() != "plain ascii, no accents here" {
+		t.Errorf("body = %q, want unmodified ASCII content (no BOM)", rec.Body.String())
+	}
+}
+
+func TestAPIFilesDownload_AlreadyHasBOM_NotDoubled(t *testing.T) {
+	dir := t.TempDir()
+	existingBOM := []byte{0xEF, 0xBB, 0xBF}
+	content := append(append([]byte{}, existingBOM...), []byte("þegar með BOM")...)
+	if err := os.WriteFile(filepath.Join(dir, "note.txt"), content, 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	cfg := httpserver.Config{
+		CORSAllowedOrigin: "http://localhost:5178",
+		FileBrowserRoots:  []filebrowser.Root{{Label: "Documents", Path: dir}},
+	}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/files/download?root=Documents&path=&file=note.txt", nil)
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body=%s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Equal(rec.Body.Bytes(), content) {
+		t.Errorf("body = %x, want unmodified original bytes %x (no second BOM)", rec.Body.Bytes(), content)
+	}
+}
+
+func TestAPIFilesDownload_BinaryFile_NoBOMAdded(t *testing.T) {
+	dir := t.TempDir()
+	// PNG magic bytes followed by non-ASCII binary payload — must not be
+	// mistaken for UTF-8 text just because it contains bytes >= 0x80.
+	binary := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x01, 0x02, 0xFF, 0xFE}
+	if err := os.WriteFile(filepath.Join(dir, "image.png"), binary, 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	cfg := httpserver.Config{
+		CORSAllowedOrigin: "http://localhost:5178",
+		FileBrowserRoots:  []filebrowser.Root{{Label: "Documents", Path: dir}},
+	}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/files/download?root=Documents&path=&file=image.png", nil)
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body=%s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Equal(rec.Body.Bytes(), binary) {
+		t.Errorf("body = %x, want unmodified binary bytes %x", rec.Body.Bytes(), binary)
 	}
 }
 
