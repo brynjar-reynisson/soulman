@@ -10,6 +10,7 @@ vi.mock('../auth', () => ({ getAccessToken: vi.fn().mockResolvedValue('tok-abc')
 const mockListFiles = vi.fn();
 const mockDownloadFile = vi.fn();
 const mockUploadFile = vi.fn();
+const mockShareFile = vi.fn();
 vi.mock('../api', async () => {
   const actual = await vi.importActual<typeof import('../api')>('../api');
   return {
@@ -17,12 +18,17 @@ vi.mock('../api', async () => {
     listFiles: (...args: unknown[]) => mockListFiles(...args),
     downloadFile: (...args: unknown[]) => mockDownloadFile(...args),
     uploadFile: (...args: unknown[]) => mockUploadFile(...args),
+    shareFile: (...args: unknown[]) => mockShareFile(...args),
   };
 });
 
 beforeEach(() => {
   vi.clearAllMocks();
   window.history.replaceState(null, '', '/');
+  Object.defineProperty(navigator, 'clipboard', {
+    value: { writeText: vi.fn().mockResolvedValue(undefined) },
+    configurable: true,
+  });
 });
 
 describe('FileBrowser', () => {
@@ -46,9 +52,34 @@ describe('FileBrowser', () => {
     const { FileBrowser } = await import('./FileBrowser');
     render(<FileBrowser root="Documents" />);
 
-    await userEvent.click(await screen.findByText('Download'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Download' }));
 
     expect(mockDownloadFile).toHaveBeenCalledWith('tok-abc', 'Documents', '', 'note.txt');
+  });
+
+  it('creates a share link, copies it to the clipboard, and shows a success message', async () => {
+    mockListFiles.mockResolvedValue({ folders: [], files: [{ name: 'note.txt', size: 42 }] });
+    mockShareFile.mockResolvedValue({ url: '/dl/abc123', expiresAt: '2026-08-19T16:00:00Z' });
+    const { FileBrowser } = await import('./FileBrowser');
+    render(<FileBrowser root="Documents" />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Share' }));
+
+    expect(mockShareFile).toHaveBeenCalledWith('tok-abc', 'Documents', '', 'note.txt');
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(`${window.location.origin}/dl/abc123`);
+    expect(await screen.findByText('Link copied')).toBeInTheDocument();
+  });
+
+  it('shows an error and no success message when creating a share link fails', async () => {
+    mockListFiles.mockResolvedValue({ folders: [], files: [{ name: 'note.txt', size: 42 }] });
+    mockShareFile.mockRejectedValue(new ApiError(500, 'share failed (500)'));
+    const { FileBrowser } = await import('./FileBrowser');
+    render(<FileBrowser root="Documents" />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Share' }));
+
+    expect(await screen.findByText('Failed to create share link')).toBeInTheDocument();
+    expect(screen.queryByText('Link copied')).not.toBeInTheDocument();
   });
 
   it('shows a replace confirmation on a 409 and retries with overwrite=true', async () => {

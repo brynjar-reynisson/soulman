@@ -1,8 +1,9 @@
 // web/src/components/FileBrowser.tsx
 import { useEffect, useRef, useState } from 'react';
 import { getAccessToken } from '../auth';
-import { listFiles, downloadFile, uploadFile, ApiError, type FileListing } from '../api';
+import { listFiles, downloadFile, uploadFile, shareFile, ApiError, type FileListing } from '../api';
 import { getParam, setParams } from '../urlState';
+import { DownloadIcon, ShareIcon } from './icons';
 
 export function FileBrowser({ root }: { root: string }) {
   const [currentPath, setCurrentPath] = useState<string>(() => getParam('filePath') ?? '');
@@ -11,6 +12,7 @@ export function FileBrowser({ root }: { root: string }) {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [conflictFile, setConflictFile] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [shareSuccessFile, setShareSuccessFile] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -35,18 +37,33 @@ export function FileBrowser({ root }: { root: string }) {
 
   function navigateTo(path: string) {
     setCurrentPath(path);
+    setShareSuccessFile(null);
     setParams({ fileRoot: root, filePath: path || null });
   }
 
   const crumbs = currentPath === '' ? [] : currentPath.split('/');
 
   async function handleDownload(name: string) {
+    setShareSuccessFile(null);
     const token = await getAccessToken();
     try {
       await downloadFile(token, root, currentPath, name);
     } catch {
       setError('Download failed — the file may have moved');
       setRefreshKey((k) => k + 1);
+    }
+  }
+
+  async function handleShare(name: string) {
+    setShareSuccessFile(null);
+    const token = await getAccessToken();
+    try {
+      const { url } = await shareFile(token, root, currentPath, name);
+      await navigator.clipboard.writeText(window.location.origin + url);
+      setError(null);
+      setShareSuccessFile(name);
+    } catch {
+      setError('Failed to create share link');
     }
   }
 
@@ -108,9 +125,23 @@ export function FileBrowser({ root }: { root: string }) {
             <li key={file.name} className="flex items-center gap-2">
               <span className="text-sm">{file.name}</span>
               <span className="text-xs text-gray-400">{formatSize(file.size)}</span>
-              <button onClick={() => handleDownload(file.name)} className="text-sm underline">
-                Download
+              <button
+                onClick={() => handleDownload(file.name)}
+                aria-label="Download"
+                title="Download"
+                className="text-gray-600 hover:text-gray-900"
+              >
+                <DownloadIcon />
               </button>
+              <button
+                onClick={() => handleShare(file.name)}
+                aria-label="Share"
+                title="Share"
+                className="text-gray-600 hover:text-gray-900"
+              >
+                <ShareIcon />
+              </button>
+              {shareSuccessFile === file.name && <span className="text-xs text-green-600">Link copied</span>}
             </li>
           ))}
         </ul>
