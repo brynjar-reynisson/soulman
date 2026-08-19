@@ -13,6 +13,7 @@ import (
 
 	"soulman/web-svc/auth"
 	"soulman/web-svc/claudesession"
+	"soulman/web-svc/filebrowser"
 )
 
 // Config holds the values httpserver needs beyond the port and verifier —
@@ -27,6 +28,7 @@ type Config struct {
 	ReportsRoot        string
 	ObsidianRoot       string
 	ClaudeProjectRoots []claudesession.Root
+	FileBrowserRoots   []filebrowser.Root
 }
 
 type Server struct {
@@ -83,6 +85,7 @@ func (s *Server) buildRouter() chi.Router {
 		r.Post("/api/obsidian/file/rename", s.obsidianFileRename)
 		r.Get("/api/claude/roots", s.claudeRoots)
 		r.Post("/api/claude/launch", s.claudeLaunch)
+		r.Get("/api/files/roots", s.filesRoots)
 	})
 
 	return r
