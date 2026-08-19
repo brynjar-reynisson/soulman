@@ -9,6 +9,7 @@ import (
 	"soulman/web-svc/auth"
 	"soulman/web-svc/claudesession"
 	"soulman/web-svc/config"
+	"soulman/web-svc/filebrowser"
 	"soulman/web-svc/httpserver"
 )
 
@@ -26,6 +27,11 @@ func main() {
 		claudeRoots[i] = claudesession.Root{Label: r.Label, Path: r.Path}
 	}
 
+	fileBrowserRoots := make([]filebrowser.Root, len(cfg.FileBrowserRoots))
+	for i, r := range cfg.FileBrowserRoots {
+		fileBrowserRoots[i] = filebrowser.Root{Label: r.Label, Path: r.Path}
+	}
+
 	srv := httpserver.New(cfg.HTTPPort, httpserver.Config{
 		CORSAllowedOrigin:  cfg.CORSAllowedOrigin,
 		PerceptionSvcURL:   cfg.PerceptionSvcURL,
@@ -35,6 +41,7 @@ func main() {
 		ReportsRoot:        cfg.SoulmanRoot,
 		ObsidianRoot:       cfg.ObsidianRoot,
 		ClaudeProjectRoots: claudeRoots,
+		FileBrowserRoots:   fileBrowserRoots,
 	}, verifier)
 
 	go func() {
