@@ -9,11 +9,13 @@ export function Dashboard({
   onSignOut,
   onOpenObsidian,
   onOpenClaude,
+  onOpenFiles,
 }: {
   initialStatus: ServiceStatus | null;
   onSignOut: () => void;
   onOpenObsidian: () => void;
   onOpenClaude: () => void;
+  onOpenFiles: () => void;
 }) {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -25,6 +27,9 @@ export function Dashboard({
           </button>
           <button onClick={onOpenObsidian} className="text-sm text-gray-500 underline">
             Obsidian
+          </button>
+          <button onClick={onOpenFiles} className="text-sm text-gray-500 underline">
+            Files
           </button>
           <button onClick={onSignOut} className="text-sm text-gray-500 underline">
             Sign out

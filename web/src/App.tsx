@@ -6,14 +6,16 @@ import { RestrictedScreen } from './components/RestrictedScreen';
 import { Dashboard } from './components/Dashboard';
 import { ObsidianPage } from './components/ObsidianPage';
 import { ClaudePage } from './components/ClaudePage';
+import { FilesPage } from './components/FilesPage';
 import { getParam, setParams } from './urlState';
 
-type ViewState = 'loading' | 'login' | 'restricted' | 'dashboard' | 'obsidian' | 'claude';
+type ViewState = 'loading' | 'login' | 'restricted' | 'dashboard' | 'obsidian' | 'claude' | 'files';
 
 function viewFromPageParam(): ViewState {
   const page = getParam('page');
   if (page === 'obsidian') return 'obsidian';
   if (page === 'claude') return 'claude';
+  if (page === 'files') return 'files';
   return 'dashboard';
 }
 
@@ -73,6 +75,16 @@ function App() {
       />
     );
   }
+  if (view === 'files') {
+    return (
+      <FilesPage
+        onBack={() => {
+          setParams({ page: null, fileRoot: null, filePath: null });
+          setView('dashboard');
+        }}
+      />
+    );
+  }
 
   return (
     <Dashboard
@@ -85,6 +97,10 @@ function App() {
       onOpenClaude={() => {
         setParams({ page: 'claude' });
         setView('claude');
+      }}
+      onOpenFiles={() => {
+        setParams({ page: 'files' });
+        setView('files');
       }}
     />
   );

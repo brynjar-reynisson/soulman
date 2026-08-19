@@ -147,4 +147,20 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: /claude/i })).toBeInTheDocument();
   });
+
+  it('switches to the files page and back via the header link', async () => {
+    mockUseAuth.mockReturnValue({ user: { email: 'breynisson@gmail.com' }, loading: false, signIn: vi.fn(), signOut: vi.fn() });
+    mockGetStatus.mockResolvedValue({ 'memory-svc': 'up' });
+    const { default: App } = await import('./App');
+    render(<App />);
+    await screen.findByText(/soulman dashboard/i);
+
+    await userEvent.click(screen.getByRole('button', { name: /files/i }));
+
+    expect(await screen.findByRole('heading', { name: /files/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText(/soulman/i));
+
+    expect(await screen.findByText(/soulman dashboard/i)).toBeInTheDocument();
+  });
 });
