@@ -94,6 +94,8 @@ func (s *Server) buildRouter() chi.Router {
 		r.Post("/api/files/share", s.filesShare)
 	})
 
+	r.Get("/dl/{token}", s.shareDownload)
+
 	return r
 }
 

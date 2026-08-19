@@ -3,12 +3,16 @@ package httpserver
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"html"
 	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/go-chi/chi/v5"
 
 	"soulman/web-svc/filebrowser"
 	"soulman/web-svc/sharelink"
@@ -241,4 +245,36 @@ func (s *Server) filesShare(w http.ResponseWriter, r *http.Request) {
 		"url":       "/dl/" + token,
 		"expiresAt": expiresAt,
 	})
+}
+
+func (s *Server) shareDownload(w http.ResponseWriter, r *http.Request) {
+	rootLabel, relPath, filename, err := sharelink.Verify(s.cfg.ShareLinkSecret, chi.URLParam(r, "token"))
+	if errors.Is(err, sharelink.ErrExpired) {
+		writeShareLinkError(w, http.StatusGone, "This link has expired.")
+		return
+	}
+	if err != nil {
+		writeShareLinkError(w, http.StatusNotFound, "This link is invalid or the file is no longer available.")
+		return
+	}
+	root, ok := findFileBrowserRoot(s.cfg.FileBrowserRoots, rootLabel)
+	if !ok {
+		writeShareLinkError(w, http.StatusNotFound, "This link is invalid or the file is no longer available.")
+		return
+	}
+	absPath, err := filebrowser.ResolveFile(root, relPath, filename)
+	if err != nil {
+		writeShareLinkError(w, http.StatusNotFound, "This link is invalid or the file is no longer available.")
+		return
+	}
+	serveFileDownload(w, r, absPath, filename)
+}
+
+// writeShareLinkError writes a minimal HTML page rather than JSON — unlike
+// every other error path in this file, a human may land here directly by
+// opening a stale or tampered share link in a browser.
+func writeShareLinkError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	fmt.Fprintf(w, "<!doctype html><meta charset=\"utf-8\"><p>%s</p>", html.EscapeString(message))
 }

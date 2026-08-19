@@ -18,6 +18,7 @@ import (
 	"soulman/web-svc/auth"
 	"soulman/web-svc/filebrowser"
 	"soulman/web-svc/httpserver"
+	"soulman/web-svc/sharelink"
 )
 
 func TestAPIFilesRoots_ReportsExistsPerRoot(t *testing.T) {
@@ -508,5 +509,107 @@ func TestAPIFilesShare_NoToken_Returns401(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestShareDownload_ValidToken_ServesFileBytes(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("hello world"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	secret := []byte("test-secret-32-bytes-long-abcdef")
+	cfg := httpserver.Config{
+		CORSAllowedOrigin: "http://localhost:5178",
+		FileBrowserRoots:  []filebrowser.Root{{Label: "Documents", Path: dir}},
+		ShareLinkSecret:   secret,
+		ShareLinkTTL:      time.Hour,
+	}
+	srv := httpserver.New("9005", cfg, auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail))
+	token, _ := sharelink.Issue(secret, "Documents", "", "note.txt", time.Hour)
+
+	// Deliberately no Authorization header — reaching this handler with no
+	// auth at all is the point of a share link.
+	req := httptest.NewRequest(http.MethodGet, "/dl/"+token, nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body=%s", rec.Code, rec.Body.String())
+	}
+	if rec.Body.String() != "hello world" {
+		t.Errorf("body = %q, want %q", rec.Body.String(), "hello world")
+	}
+	if got := rec.Header().Get("Content-Disposition"); got != `attachment; filename="note.txt"` {
+		t.Errorf("Content-Disposition = %q", got)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store", got)
+	}
+}
+
+func TestShareDownload_ExpiredToken_Returns410(t *testing.T) {
+	dir := t.TempDir()
+	secret := []byte("test-secret-32-bytes-long-abcdef")
+	cfg := httpserver.Config{
+		CORSAllowedOrigin: "http://localhost:5178",
+		FileBrowserRoots:  []filebrowser.Root{{Label: "Documents", Path: dir}},
+		ShareLinkSecret:   secret,
+	}
+	srv := httpserver.New("9005", cfg, auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail))
+	token, _ := sharelink.Issue(secret, "Documents", "", "note.txt", -time.Minute)
+
+	req := httptest.NewRequest(http.MethodGet, "/dl/"+token, nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusGone {
+		t.Fatalf("status = %d, want 410, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestShareDownload_TamperedToken_Returns404(t *testing.T) {
+	dir := t.TempDir()
+	secret := []byte("test-secret-32-bytes-long-abcdef")
+	cfg := httpserver.Config{
+		CORSAllowedOrigin: "http://localhost:5178",
+		FileBrowserRoots:  []filebrowser.Root{{Label: "Documents", Path: dir}},
+		ShareLinkSecret:   secret,
+	}
+	srv := httpserver.New("9005", cfg, auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail))
+	token, _ := sharelink.Issue(secret, "Documents", "", "note.txt", time.Hour)
+
+	req := httptest.NewRequest(http.MethodGet, "/dl/"+token+"x", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestShareDownload_FileDeletedSinceIssue_Returns404(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.txt")
+	if err := os.WriteFile(path, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	secret := []byte("test-secret-32-bytes-long-abcdef")
+	cfg := httpserver.Config{
+		CORSAllowedOrigin: "http://localhost:5178",
+		FileBrowserRoots:  []filebrowser.Root{{Label: "Documents", Path: dir}},
+		ShareLinkSecret:   secret,
+	}
+	srv := httpserver.New("9005", cfg, auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail))
+	token, _ := sharelink.Issue(secret, "Documents", "", "note.txt", time.Hour)
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/dl/"+token, nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404, body=%s", rec.Code, rec.Body.String())
 	}
 }
