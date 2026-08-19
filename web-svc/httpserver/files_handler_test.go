@@ -171,6 +171,9 @@ func TestAPIFilesDownload_ServesFileBytes(t *testing.T) {
 	if got := rec.Header().Get("Content-Disposition"); got != `attachment; filename="note.txt"` {
 		t.Errorf("Content-Disposition = %q", got)
 	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store — a stale cached download would silently mask any future fix to this handler", got)
+	}
 }
 
 func TestAPIFilesDownload_NonASCIIText_PrependsUTF8BOM(t *testing.T) {
@@ -207,6 +210,9 @@ func TestAPIFilesDownload_NonASCIIText_PrependsUTF8BOM(t *testing.T) {
 	}
 	if got := rec.Header().Get("Content-Length"); got != strconv.Itoa(len(content)+3) {
 		t.Errorf("Content-Length = %q, want %d", got, len(content)+3)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store", got)
 	}
 }
 

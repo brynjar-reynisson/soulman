@@ -87,6 +87,14 @@ func (s *Server) filesDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	// This must never be served from a browser or edge (Cloudflare tunnel)
+	// cache: a file's content can change between browses, and — the
+	// concrete incident that motivated this — http.ServeFile's
+	// Last-Modified header alone was enough for a browser to silently
+	// replay a stale cached response after this handler's encoding
+	// behavior changed server-side, making the fix look like it hadn't
+	// deployed at all even though the origin was already correct.
+	w.Header().Set("Cache-Control", "no-store")
 
 	needsBOM, err := isBOMlessUTF8Text(absPath)
 	if err != nil {
