@@ -2,6 +2,7 @@
 .trash
 .worktrees
 .claude
+.superpowers
 install.log
 
 # Runtime artifacts a service can accidentally write here if launched with
