@@ -17,6 +17,7 @@ import {
   listFiles,
   downloadFile,
   uploadFile,
+  shareFile,
   ApiError,
 } from './api';
 
@@ -321,5 +322,31 @@ describe('uploadFile', () => {
     const file = new File(['hello'], 'note.txt');
 
     await expect(uploadFile('tok-abc', 'Documents', '', file, false)).rejects.toMatchObject({ status: 409 });
+  });
+});
+
+describe('shareFile', () => {
+  it('POSTs to /api/files/share with encoded query params and returns the parsed body', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ url: '/dl/abc123', expiresAt: '2026-08-19T16:00:00Z' }),
+    });
+
+    const result = await shareFile('tok-abc', 'Documents', 'Taxes', '2025-return.pdf');
+
+    expect(result).toEqual({ url: '/dl/abc123', expiresAt: '2026-08-19T16:00:00Z' });
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/files/share?root=Documents&path=Taxes&file=2025-return.pdf');
+    expect(options.method).toBe('POST');
+    expect(options.headers).toEqual({ Authorization: 'Bearer tok-abc' });
+  });
+
+  it('throws ApiError with the response status on failure', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: false, status: 404 });
+
+    await expect(shareFile('tok-abc', 'Documents', '', 'missing.pdf')).rejects.toMatchObject({ status: 404 });
   });
 });

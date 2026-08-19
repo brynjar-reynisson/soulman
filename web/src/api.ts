@@ -233,3 +233,24 @@ export async function uploadFile(
     throw new ApiError(response.status, `upload failed (${response.status})`);
   }
 }
+
+export interface ShareLinkResponse {
+  url: string;
+  expiresAt: string;
+}
+
+export async function shareFile(
+  token: string | null,
+  root: string,
+  path: string,
+  file: string,
+): Promise<ShareLinkResponse> {
+  const response = await fetch(
+    `/api/files/share?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}`,
+    { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {} },
+  );
+  if (!response.ok) {
+    throw new ApiError(response.status, `share failed (${response.status})`);
+  }
+  return response.json();
+}
