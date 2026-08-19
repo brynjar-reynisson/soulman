@@ -9,6 +9,7 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: {
       '/api': { target: 'http://localhost:9015', changeOrigin: true },
+      '/dl': { target: 'http://localhost:9015', changeOrigin: true },
     },
   },
   preview: {
@@ -17,6 +18,7 @@ export default defineConfig({
     allowedHosts: ['soulman.breynisson.org'],
     proxy: {
       '/api': { target: 'http://localhost:9005', changeOrigin: true },
+      '/dl': { target: 'http://localhost:9005', changeOrigin: true },
     },
   },
   test: {
