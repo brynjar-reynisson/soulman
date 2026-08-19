@@ -140,3 +140,50 @@ func TestAPIFilesList_PathTraversal_Returns400(t *testing.T) {
 		t.Fatalf("status = %d, want 400, body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestAPIFilesDownload_ServesFileBytes(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("hello world"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	cfg := httpserver.Config{
+		CORSAllowedOrigin: "http://localhost:5178",
+		FileBrowserRoots:  []filebrowser.Root{{Label: "Documents", Path: dir}},
+	}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/files/download?root=Documents&path=&file=note.txt", nil)
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body=%s", rec.Code, rec.Body.String())
+	}
+	if rec.Body.String() != "hello world" {
+		t.Errorf("body = %q, want %q", rec.Body.String(), "hello world")
+	}
+	if got := rec.Header().Get("Content-Disposition"); got != `attachment; filename="note.txt"` {
+		t.Errorf("Content-Disposition = %q", got)
+	}
+}
+
+func TestAPIFilesDownload_MissingFile_Returns404(t *testing.T) {
+	dir := t.TempDir()
+	cfg := httpserver.Config{
+		CORSAllowedOrigin: "http://localhost:5178",
+		FileBrowserRoots:  []filebrowser.Root{{Label: "Documents", Path: dir}},
+	}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/files/download?root=Documents&path=&file=missing.txt", nil)
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404, body=%s", rec.Code, rec.Body.String())
+	}
+}

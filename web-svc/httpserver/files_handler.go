@@ -68,3 +68,19 @@ func (s *Server) filesList(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"folders": folders, "files": resp})
 }
+
+func (s *Server) filesDownload(w http.ResponseWriter, r *http.Request) {
+	root, ok := findFileBrowserRoot(s.cfg.FileBrowserRoots, r.URL.Query().Get("root"))
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "unknown root")
+		return
+	}
+	filename := r.URL.Query().Get("file")
+	absPath, err := filebrowser.ResolveFile(root, r.URL.Query().Get("path"), filename)
+	if err != nil {
+		writeFileBrowserError(w, err)
+		return
+	}
+	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	http.ServeFile(w, r, absPath)
+}
