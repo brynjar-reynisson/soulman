@@ -160,6 +160,12 @@ type WebConfig struct {
 	ObsidianRoot       string              `json:"obsidian_root"`
 	ClaudeProjectRoots []ClaudeProjectRoot `json:"claude_project_roots"`
 	FileBrowserRoots   []FileBrowserRoot   `json:"file_browser_roots"`
+	// ShareLinkTTLMinutes is how long a generated share link
+	// (web-svc/sharelink) stays valid. Optional — zero or absent defaults
+	// to 60 in web-svc/config.Load, the same loose-default posture as
+	// DoNotDisturb's Start/End (not a fatal validation error). See
+	// docs/superpowers/specs/2026-08-19-file-sharing-design.md.
+	ShareLinkTTLMinutes int `json:"share_link_ttl_minutes"`
 }
 
 // Load reads and parses the JSON config file at path. An empty or missing

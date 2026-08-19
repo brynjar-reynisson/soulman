@@ -51,6 +51,7 @@
     "file_browser_roots": [
       { "label": "Documents", "path": "C:\\Users\\Lenovo\\Documents" },
       { "label": "Downloads", "path": "C:\\Users\\Lenovo\\Downloads" }
-    ]
+    ],
+    "share_link_ttl_minutes": 60
   }
 }

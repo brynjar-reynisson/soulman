@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"soulman/common/sharedconfig"
 )
@@ -21,6 +22,7 @@ type Config struct {
 	ObsidianRoot       string
 	ClaudeProjectRoots []sharedconfig.ClaudeProjectRoot
 	FileBrowserRoots   []sharedconfig.FileBrowserRoot
+	ShareLinkTTL       time.Duration
 }
 
 func Load() (*Config, error) {
@@ -70,6 +72,11 @@ func Load() (*Config, error) {
 	// accepted tokens to ES256 only, it does not accept "anything."
 	jwtSecret := env("SUPABASE_JWT_SECRET", "")
 
+	shareLinkTTL := time.Duration(shared.Web.ShareLinkTTLMinutes) * time.Minute
+	if shareLinkTTL <= 0 {
+		shareLinkTTL = 60 * time.Minute
+	}
+
 	return &Config{
 		HTTPPort:           env("HTTP_PORT", "9005"),
 		SupabaseURL:        supabaseURL,
@@ -84,6 +91,7 @@ func Load() (*Config, error) {
 		ObsidianRoot:       shared.Web.ObsidianRoot,
 		ClaudeProjectRoots: shared.Web.ClaudeProjectRoots,
 		FileBrowserRoots:   shared.Web.FileBrowserRoots,
+		ShareLinkTTL:       shareLinkTTL,
 	}, nil
 }
 

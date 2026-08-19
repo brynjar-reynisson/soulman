@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"soulman/web-svc/config"
 )
@@ -337,5 +338,44 @@ func TestLoad_MissingFileBrowserRoots_ReturnsError(t *testing.T) {
 
 	if _, err := config.Load(); err == nil {
 		t.Fatal("Load() error = nil, want an error when web.file_browser_roots is empty")
+	}
+}
+
+func TestLoad_ShareLinkTTLDefaultsTo60Minutes(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, validConfigJSON)
+	os.Setenv("CONFIG_PATH", path)
+	os.Setenv("SUPABASE_URL", "https://example.supabase.co")
+	os.Setenv("SUPABASE_JWT_SECRET", "shh")
+	defer os.Unsetenv("CONFIG_PATH")
+	defer os.Unsetenv("SUPABASE_URL")
+	defer os.Unsetenv("SUPABASE_JWT_SECRET")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.ShareLinkTTL != 60*time.Minute {
+		t.Errorf("ShareLinkTTL = %v, want 60m", cfg.ShareLinkTTL)
+	}
+}
+
+func TestLoad_ShareLinkTTLMinutesOverride(t *testing.T) {
+	dir := t.TempDir()
+	withTTL := `{"web": {"owner_email": "breynisson@gmail.com", "cors_allowed_origin": "http://localhost:5178", "perception_svc_url": "http://localhost:9011", "memory_svc_url": "http://localhost:9012", "thinking_svc_url": "http://localhost:9013", "action_svc_url": "http://localhost:9014", "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian", "claude_project_roots": [{"label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian"}], "file_browser_roots": [{"label": "Documents", "path": "C:\\Users\\Lenovo\\Documents"}], "share_link_ttl_minutes": 15}}`
+	path := writeConfigFile(t, dir, withTTL)
+	os.Setenv("CONFIG_PATH", path)
+	os.Setenv("SUPABASE_URL", "https://example.supabase.co")
+	os.Setenv("SUPABASE_JWT_SECRET", "shh")
+	defer os.Unsetenv("CONFIG_PATH")
+	defer os.Unsetenv("SUPABASE_URL")
+	defer os.Unsetenv("SUPABASE_JWT_SECRET")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.ShareLinkTTL != 15*time.Minute {
+		t.Errorf("ShareLinkTTL = %v, want 15m", cfg.ShareLinkTTL)
 	}
 }
