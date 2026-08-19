@@ -16,6 +16,7 @@ import {
   getFileBrowserRoots,
   listFiles,
   downloadFile,
+  uploadFile,
   ApiError,
 } from './api';
 
@@ -295,5 +296,29 @@ describe('downloadFile', () => {
     mockFetch.mockResolvedValue({ ok: false, status: 404 });
 
     await expect(downloadFile('tok-abc', 'Documents', '', 'missing.pdf')).rejects.toThrow(ApiError);
+  });
+});
+
+describe('uploadFile', () => {
+  it('POSTs a FormData body with the overwrite flag in the URL', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: true, status: 200 });
+    const file = new File(['hello'], 'note.txt', { type: 'text/plain' });
+
+    await uploadFile('tok-abc', 'Documents', 'Taxes', file, true);
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/files/upload?root=Documents&path=Taxes&overwrite=true');
+    expect(options.method).toBe('POST');
+    expect(options.body).toBeInstanceOf(FormData);
+    expect(options.headers).toEqual({ Authorization: 'Bearer tok-abc' });
+  });
+
+  it('throws ApiError with the response status on failure', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: false, status: 409 });
+    const file = new File(['hello'], 'note.txt');
+
+    await expect(uploadFile('tok-abc', 'Documents', '', file, false)).rejects.toMatchObject({ status: 409 });
   });
 });

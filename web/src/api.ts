@@ -215,3 +215,21 @@ export async function downloadFile(
   a.click();
   URL.revokeObjectURL(url);
 }
+
+export async function uploadFile(
+  token: string | null,
+  root: string,
+  path: string,
+  file: File,
+  overwrite: boolean,
+): Promise<void> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await fetch(
+    `/api/files/upload?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}&overwrite=${overwrite}`,
+    { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: formData },
+  );
+  if (!response.ok) {
+    throw new ApiError(response.status, `upload failed (${response.status})`);
+  }
+}
