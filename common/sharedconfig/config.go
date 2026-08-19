@@ -128,6 +128,20 @@ type ClaudeProjectRoot struct {
 	Path  string `json:"path"`
 }
 
+// FileBrowserRoot is one curated root the file browser
+// (web-svc/filebrowser) offers for browsing, download, and upload: a
+// human-readable label (matched against a request's "root" field) and
+// the filesystem path it corresponds to. A distinct type from
+// ClaudeProjectRoot even though the shape is identical — they represent
+// different concerns (small independent duplication over a shared type,
+// consistent with this repo's existing preference — see
+// web-svc/NOTES.md). See
+// docs/superpowers/specs/2026-08-19-file-browser-design.md.
+type FileBrowserRoot struct {
+	Label string `json:"label"`
+	Path  string `json:"path"`
+}
+
 // WebConfig holds web-svc's settings: the single owner email allowed full
 // dashboard access, the frontend origin CORS must allow, and the base URLs
 // of the four services web-svc calls into. Unlike GmailConfig/
@@ -145,6 +159,7 @@ type WebConfig struct {
 	ActionSvcURL       string              `json:"action_svc_url"`
 	ObsidianRoot       string              `json:"obsidian_root"`
 	ClaudeProjectRoots []ClaudeProjectRoot `json:"claude_project_roots"`
+	FileBrowserRoots   []FileBrowserRoot   `json:"file_browser_roots"`
 }
 
 // Load reads and parses the JSON config file at path. An empty or missing

@@ -20,6 +20,7 @@ type Config struct {
 	SoulmanRoot        string
 	ObsidianRoot       string
 	ClaudeProjectRoots []sharedconfig.ClaudeProjectRoot
+	FileBrowserRoots   []sharedconfig.FileBrowserRoot
 }
 
 func Load() (*Config, error) {
@@ -53,6 +54,9 @@ func Load() (*Config, error) {
 	if len(shared.Web.ClaudeProjectRoots) == 0 {
 		return nil, fmt.Errorf("shared config %s has no web.claude_project_roots configured", configPath)
 	}
+	if len(shared.Web.FileBrowserRoots) == 0 {
+		return nil, fmt.Errorf("shared config %s has no web.file_browser_roots configured", configPath)
+	}
 
 	supabaseURL := os.Getenv("SUPABASE_URL")
 	if supabaseURL == "" {
@@ -79,6 +83,7 @@ func Load() (*Config, error) {
 		SoulmanRoot:        env("SOULMAN_ROOT", `C:\Users\Lenovo\soulman-dev`),
 		ObsidianRoot:       shared.Web.ObsidianRoot,
 		ClaudeProjectRoots: shared.Web.ClaudeProjectRoots,
+		FileBrowserRoots:   shared.Web.FileBrowserRoots,
 	}, nil
 }
 

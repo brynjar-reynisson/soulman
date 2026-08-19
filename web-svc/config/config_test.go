@@ -28,6 +28,9 @@ const validConfigJSON = `{
     "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian",
     "claude_project_roots": [
       {"label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian"}
+    ],
+    "file_browser_roots": [
+      {"label": "Documents", "path": "C:\\Users\\Lenovo\\Documents"}
     ]
   }
 }`
@@ -296,5 +299,43 @@ func TestLoad_MissingClaudeProjectRoots_ReturnsError(t *testing.T) {
 
 	if _, err := config.Load(); err == nil {
 		t.Fatal("Load() error = nil, want an error when web.claude_project_roots is empty")
+	}
+}
+
+func TestLoad_PopulatesFileBrowserRoots(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, validConfigJSON)
+	os.Setenv("CONFIG_PATH", path)
+	os.Setenv("SUPABASE_URL", "https://example.supabase.co")
+	os.Setenv("SUPABASE_JWT_SECRET", "shh")
+	defer os.Unsetenv("CONFIG_PATH")
+	defer os.Unsetenv("SUPABASE_URL")
+	defer os.Unsetenv("SUPABASE_JWT_SECRET")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if len(cfg.FileBrowserRoots) != 1 {
+		t.Fatalf("len(FileBrowserRoots) = %d, want 1", len(cfg.FileBrowserRoots))
+	}
+	if cfg.FileBrowserRoots[0].Label != "Documents" || cfg.FileBrowserRoots[0].Path != `C:\Users\Lenovo\Documents` {
+		t.Errorf("FileBrowserRoots[0] = %+v", cfg.FileBrowserRoots[0])
+	}
+}
+
+func TestLoad_MissingFileBrowserRoots_ReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	incomplete := `{"web": {"owner_email": "breynisson@gmail.com", "cors_allowed_origin": "http://localhost:5178", "perception_svc_url": "http://localhost:9011", "memory_svc_url": "http://localhost:9012", "thinking_svc_url": "http://localhost:9013", "action_svc_url": "http://localhost:9014", "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian", "claude_project_roots": [{"label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian"}], "file_browser_roots": []}}`
+	path := writeConfigFile(t, dir, incomplete)
+	os.Setenv("CONFIG_PATH", path)
+	os.Setenv("SUPABASE_URL", "https://example.supabase.co")
+	os.Setenv("SUPABASE_JWT_SECRET", "shh")
+	defer os.Unsetenv("CONFIG_PATH")
+	defer os.Unsetenv("SUPABASE_URL")
+	defer os.Unsetenv("SUPABASE_JWT_SECRET")
+
+	if _, err := config.Load(); err == nil {
+		t.Fatal("Load() error = nil, want an error when web.file_browser_roots is empty")
 	}
 }

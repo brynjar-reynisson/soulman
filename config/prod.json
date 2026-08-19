@@ -47,6 +47,10 @@
       { "label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian" },
       { "label": "IdeaProjects", "path": "C:\\Users\\Lenovo\\IdeaProjects" },
       { "label": "Misc Projects", "path": "C:\\Users\\Lenovo\\misc_projects" }
+    ],
+    "file_browser_roots": [
+      { "label": "Documents", "path": "C:\\Users\\Lenovo\\Documents" },
+      { "label": "Downloads", "path": "C:\\Users\\Lenovo\\Downloads" }
     ]
   }
 }
