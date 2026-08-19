@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"soulman/web-svc/filebrowser"
+	"soulman/web-svc/sharelink"
 )
 
 type fileBrowserRootResponse struct {
@@ -221,4 +222,23 @@ func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) filesShare(w http.ResponseWriter, r *http.Request) {
+	root, ok := findFileBrowserRoot(s.cfg.FileBrowserRoots, r.URL.Query().Get("root"))
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "unknown root")
+		return
+	}
+	relPath := r.URL.Query().Get("path")
+	filename := r.URL.Query().Get("file")
+	if _, err := filebrowser.ResolveFile(root, relPath, filename); err != nil {
+		writeFileBrowserError(w, err)
+		return
+	}
+	token, expiresAt := sharelink.Issue(s.cfg.ShareLinkSecret, root.Label, relPath, filename, s.cfg.ShareLinkTTL)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"url":       "/dl/" + token,
+		"expiresAt": expiresAt,
+	})
 }

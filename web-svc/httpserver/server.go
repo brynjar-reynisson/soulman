@@ -91,6 +91,7 @@ func (s *Server) buildRouter() chi.Router {
 		r.Get("/api/files/list", s.filesList)
 		r.Get("/api/files/download", s.filesDownload)
 		r.Post("/api/files/upload", s.filesUpload)
+		r.Post("/api/files/share", s.filesShare)
 	})
 
 	return r

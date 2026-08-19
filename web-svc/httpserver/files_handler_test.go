@@ -11,7 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"soulman/web-svc/auth"
 	"soulman/web-svc/filebrowser"
@@ -436,5 +438,75 @@ func TestAPIFilesUpload_UnknownRoot_Returns400(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAPIFilesShare_ReturnsURLAndExpiry(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	cfg := httpserver.Config{
+		CORSAllowedOrigin: "http://localhost:5178",
+		FileBrowserRoots:  []filebrowser.Root{{Label: "Documents", Path: dir}},
+		ShareLinkSecret:   []byte("test-secret-32-bytes-long-abcdef"),
+		ShareLinkTTL:      time.Hour,
+	}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/files/share?root=Documents&path=&file=note.txt", nil)
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body=%s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		URL       string `json:"url"`
+		ExpiresAt string `json:"expiresAt"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !strings.HasPrefix(body.URL, "/dl/") {
+		t.Errorf("url = %q, want a /dl/ prefix", body.URL)
+	}
+	if body.ExpiresAt == "" {
+		t.Errorf("expiresAt is empty")
+	}
+}
+
+func TestAPIFilesShare_MissingFile_Returns404(t *testing.T) {
+	dir := t.TempDir()
+	cfg := httpserver.Config{
+		CORSAllowedOrigin: "http://localhost:5178",
+		FileBrowserRoots:  []filebrowser.Root{{Label: "Documents", Path: dir}},
+		ShareLinkSecret:   []byte("test-secret-32-bytes-long-abcdef"),
+		ShareLinkTTL:      time.Hour,
+	}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/files/share?root=Documents&path=&file=missing.txt", nil)
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAPIFilesShare_NoToken_Returns401(t *testing.T) {
+	cfg := httpserver.Config{CORSAllowedOrigin: "http://localhost:5178"}
+	srv := httpserver.New("9005", cfg, auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail))
+	req := httptest.NewRequest(http.MethodPost, "/api/files/share?root=Documents&path=&file=note.txt", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
 	}
 }
