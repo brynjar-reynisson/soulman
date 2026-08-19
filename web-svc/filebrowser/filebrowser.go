@@ -11,6 +11,7 @@ package filebrowser
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -164,4 +165,35 @@ func ResolveFile(root Root, relPath, filename string) (string, error) {
 		return "", ErrNotFound
 	}
 	return path, nil
+}
+
+// Save writes r's contents as relPath/filename. relPath's folder must
+// already exist (no folder creation) — returns ErrNotFound otherwise.
+// Returns ErrExists if filename already exists and overwrite is false.
+func Save(root Root, relPath, filename string, r io.Reader, overwrite bool) error {
+	dir, err := resolveDir(root, relPath)
+	if err != nil {
+		return err
+	}
+	if !validSegment(filename) {
+		return ErrInvalidName
+	}
+	path := filepath.Join(dir, filename)
+	if !isWithin(dir, path) {
+		return ErrInvalidName
+	}
+	if !overwrite {
+		if _, err := os.Stat(path); err == nil {
+			return ErrExists
+		}
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("filebrowser: creating %s: %w", path, err)
+	}
+	defer f.Close()
+	if _, err := io.Copy(f, r); err != nil {
+		return fmt.Errorf("filebrowser: writing %s: %w", path, err)
+	}
+	return nil
 }

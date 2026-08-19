@@ -1,6 +1,7 @@
 package filebrowser_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
@@ -175,5 +176,60 @@ func TestResolveFile_TargetIsDirectory_ReturnsErrNotFound(t *testing.T) {
 	_, err := filebrowser.ResolveFile(root, "", "Taxes")
 	if !errors.Is(err, filebrowser.ErrNotFound) {
 		t.Errorf("ResolveFile() error = %v, want ErrNotFound for a directory target", err)
+	}
+}
+
+func TestSave_NewFile_WritesContent(t *testing.T) {
+	dir := t.TempDir()
+	root := filebrowser.Root{Label: "Documents", Path: dir}
+
+	err := filebrowser.Save(root, "", "note.txt", bytes.NewReader([]byte("hello")), false)
+	if err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "note.txt"))
+	if err != nil {
+		t.Fatalf("reading saved file: %v", err)
+	}
+	if string(got) != "hello" {
+		t.Errorf("content = %q, want hello", got)
+	}
+}
+
+func TestSave_ExistingFileNoOverwrite_ReturnsErrExists(t *testing.T) {
+	dir := t.TempDir()
+	mustWriteFile(t, filepath.Join(dir, "note.txt"), []byte("original"))
+	root := filebrowser.Root{Label: "Documents", Path: dir}
+
+	err := filebrowser.Save(root, "", "note.txt", bytes.NewReader([]byte("new")), false)
+	if !errors.Is(err, filebrowser.ErrExists) {
+		t.Errorf("Save() error = %v, want ErrExists", err)
+	}
+	got, _ := os.ReadFile(filepath.Join(dir, "note.txt"))
+	if string(got) != "original" {
+		t.Errorf("content = %q, want unchanged (no write attempted)", got)
+	}
+}
+
+func TestSave_ExistingFileWithOverwrite_ReplacesContent(t *testing.T) {
+	dir := t.TempDir()
+	mustWriteFile(t, filepath.Join(dir, "note.txt"), []byte("original"))
+	root := filebrowser.Root{Label: "Documents", Path: dir}
+
+	err := filebrowser.Save(root, "", "note.txt", bytes.NewReader([]byte("replaced")), true)
+	if err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	got, _ := os.ReadFile(filepath.Join(dir, "note.txt"))
+	if string(got) != "replaced" {
+		t.Errorf("content = %q, want replaced", got)
+	}
+}
+
+func TestSave_TargetFolderMissing_ReturnsErrNotFound(t *testing.T) {
+	root := filebrowser.Root{Label: "Documents", Path: t.TempDir()}
+	err := filebrowser.Save(root, "DoesNotExist", "note.txt", bytes.NewReader([]byte("x")), false)
+	if !errors.Is(err, filebrowser.ErrNotFound) {
+		t.Errorf("Save() error = %v, want ErrNotFound", err)
 	}
 }
