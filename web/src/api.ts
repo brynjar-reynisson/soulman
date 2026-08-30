@@ -254,3 +254,16 @@ export async function shareFile(
   }
   return response.json();
 }
+
+export interface SearchResult {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
+export interface SearchResults {
+  results: SearchResult[];
+}
+
+export const search = (token: string | null, query: string): Promise<SearchResults> =>
+  getJSON(`/api/search?q=${encodeURIComponent(query)}`, token);

@@ -18,6 +18,7 @@ import {
   downloadFile,
   uploadFile,
   shareFile,
+  search,
   ApiError,
 } from './api';
 
@@ -348,5 +349,31 @@ describe('shareFile', () => {
     mockFetch.mockResolvedValue({ ok: false, status: 404 });
 
     await expect(shareFile('tok-abc', 'Documents', '', 'missing.pdf')).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe('search', () => {
+  it('passes the q query param and returns parsed results', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ results: [{ title: 'Soulman', url: 'https://example.com', snippet: 'desc' }] }),
+    });
+
+    const result = await search('tok-abc', 'soulman ai agent');
+
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].title).toBe('Soulman');
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toContain('/api/search');
+    expect(url).toContain('q=soulman%20ai%20agent');
+  });
+
+  it('throws ApiError on a non-ok response', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: false, status: 503 });
+
+    await expect(search('tok-abc', 'soulman')).rejects.toThrow(ApiError);
   });
 });
