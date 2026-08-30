@@ -120,28 +120,42 @@ const shareDownloadPrefix = "/dl/"
 // redactedSharePath replaces a share link's real path in the request log.
 const redactedSharePath = "/dl/<redacted>"
 
-// requestLogger logs every request, but routes share-link downloads away
-// from chi's middleware.Logger: a /dl/{token} URL *is* the bearer
-// capability (no other credential is needed to fetch the file), and
-// middleware.Logger writes the full path verbatim into web-svc-startup.log,
-// which is never rotated. Everything else keeps chi's logger unchanged.
+// searchPath is the search route, whose query string carries the user's
+// search text — see requestLogger.
+const searchPath = "/api/search"
+
+// redactedSearchPath replaces a search request's query string in the
+// request log.
+const redactedSearchPath = "/api/search?q=<redacted>"
+
+// requestLogger logs every request, but routes two kinds of request away
+// from chi's middleware.Logger: share-link downloads (a /dl/{token} URL *is*
+// the bearer capability — no other credential is needed to fetch the file)
+// and searches (whose query string is the user's search text). Both would
+// otherwise be written verbatim into web-svc-startup.log by
+// middleware.Logger, which is never rotated. Everything else keeps chi's
+// logger unchanged.
 //
 // The split has to happen here, ahead of chi's logger, because
 // middleware.RequestLogger snapshots the request path into its log entry
 // *before* calling the next handler — there is no later hook that can
-// change what it prints. Redacting by mutating r.URL.Path in a preceding
-// middleware isn't an option either: chi routes on the mutated path, so
-// shareDownload's chi.URLParam(r, "token") would receive the placeholder
-// instead of the real token.
+// change what it prints. Redacting by mutating r.URL.Path/r.URL.RawQuery in
+// a preceding middleware isn't an option either: chi routes on the mutated
+// path, so shareDownload's chi.URLParam(r, "token") would receive the
+// placeholder instead of the real token.
 func requestLogger(next http.Handler) http.Handler {
 	chiLogged := middleware.Logger(next)
-	redactedLogged := shareDownloadLogger(next)
+	shareLogged := shareDownloadLogger(next)
+	searchLogged := searchQueryLogger(next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, shareDownloadPrefix) {
-			redactedLogged.ServeHTTP(w, r)
-			return
+		switch {
+		case strings.HasPrefix(r.URL.Path, shareDownloadPrefix):
+			shareLogged.ServeHTTP(w, r)
+		case r.URL.Path == searchPath:
+			searchLogged.ServeHTTP(w, r)
+		default:
+			chiLogged.ServeHTTP(w, r)
 		}
-		chiLogged.ServeHTTP(w, r)
 	})
 }
 
@@ -156,6 +170,27 @@ func shareDownloadLogger(next http.Handler) http.Handler {
 			slog.Info("share link request",
 				"method", r.Method,
 				"path", redactedSharePath,
+				"status", ww.Status(),
+				"bytes", ww.BytesWritten(),
+				"duration", time.Since(start).String(),
+			)
+		}()
+		next.ServeHTTP(ww, r)
+	})
+}
+
+// searchQueryLogger logs method, status, response size and duration for a
+// search request against a redacted path, the same shape as
+// shareDownloadLogger — the query string carries the user's search text and
+// this file's web-svc-startup.log is never rotated.
+func searchQueryLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		start := time.Now()
+		defer func() {
+			slog.Info("search request",
+				"method", r.Method,
+				"path", redactedSearchPath,
 				"status", ww.Status(),
 				"bytes", ww.BytesWritten(),
 				"duration", time.Since(start).String(),

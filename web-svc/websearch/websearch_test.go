@@ -18,6 +18,9 @@ func TestClient_Search_Success(t *testing.T) {
 		if got := r.URL.Query().Get("q"); got != "soulman ai agent" {
 			t.Errorf("q = %q, want %q", got, "soulman ai agent")
 		}
+		if got := r.URL.Query().Get("count"); got != "10" {
+			t.Errorf("count = %q, want %q", got, "10")
+		}
 		if got := r.Header.Get("X-Subscription-Token"); got != "test-key" {
 			t.Errorf("X-Subscription-Token = %q, want test-key", got)
 		}
