@@ -19,6 +19,10 @@ export function SearchPage({ onBack }: { onBack: () => void }) {
       setResults(data.results);
       setParams({ page: 'search', q });
     } catch (err) {
+      // Deliberately leave any previously-rendered `results` untouched here:
+      // results are only replaced on a new successful search, so a
+      // transient failure shows the error banner above the prior results
+      // instead of blanking out what the user was just looking at.
       if (err instanceof ApiError && err.status === 503) {
         setError('Web search is not configured');
       } else {
@@ -31,10 +35,19 @@ export function SearchPage({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     if (query) runSearch(query);
+    // Mount-only effect (deliberately empty deps). oxlint recognizes this
+    // eslint-style directive comment — it aims for eslint-comment
+    // compatibility — and actually suppresses react-hooks/exhaustive-deps
+    // with it, despite this project's .oxlintrc.json not listing
+    // "react-hooks" among its plugins: removing the line below surfaces a
+    // real warning under `npm run lint`, verified empirically.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const searchBox = (
+  // Empty-state box (pre-search) is rendered larger — a google.com-style
+  // centered search box — so it reads as visually distinct from the
+  // compact, top-pinned bar shown once results exist, not just repositioned.
+  const renderSearchBox = (size: 'large' | 'compact') => (
     <form
       className="flex gap-2"
       onSubmit={(e) => {
@@ -50,10 +63,13 @@ export function SearchPage({ onBack }: { onBack: () => void }) {
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        className="flex-1 rounded border px-3 py-2 text-sm"
+        className={`flex-1 rounded border ${size === 'large' ? 'px-4 py-3 text-base' : 'px-3 py-2 text-sm'}`}
         placeholder="Search the web..."
       />
-      <button type="submit" className="rounded border bg-white px-4 py-2 text-sm">
+      <button
+        type="submit"
+        className={`rounded border bg-white ${size === 'large' ? 'px-6 py-3 text-base' : 'px-4 py-2 text-sm'}`}
+      >
         Search
       </button>
     </form>
@@ -70,7 +86,7 @@ export function SearchPage({ onBack }: { onBack: () => void }) {
         </div>
         <div className="mx-auto mt-24 max-w-xl">
           <h2 className="mb-6 text-center text-xl font-medium">Soulman Search</h2>
-          {searchBox}
+          {renderSearchBox('large')}
           {loading && <p className="mt-4 text-center text-sm text-gray-500">Searching…</p>}
           {error && <p className="mt-4 text-center text-sm text-red-600">{error}</p>}
         </div>
@@ -87,7 +103,7 @@ export function SearchPage({ onBack }: { onBack: () => void }) {
         </button>
       </div>
       <div className="mx-auto max-w-2xl">
-        <div className="mb-4">{searchBox}</div>
+        <div className="mb-4">{renderSearchBox('compact')}</div>
         {loading && <p className="text-sm text-gray-500">Searching…</p>}
         {error && <p className="text-sm text-red-600">{error}</p>}
         {!loading && !error && results.length === 0 && (
