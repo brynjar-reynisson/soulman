@@ -7,15 +7,17 @@ import { Dashboard } from './components/Dashboard';
 import { ObsidianPage } from './components/ObsidianPage';
 import { ClaudePage } from './components/ClaudePage';
 import { FilesPage } from './components/FilesPage';
+import { SearchPage } from './components/SearchPage';
 import { getParam, setParams } from './urlState';
 
-type ViewState = 'loading' | 'login' | 'restricted' | 'dashboard' | 'obsidian' | 'claude' | 'files';
+type ViewState = 'loading' | 'login' | 'restricted' | 'dashboard' | 'obsidian' | 'claude' | 'files' | 'search';
 
 function viewFromPageParam(): ViewState {
   const page = getParam('page');
   if (page === 'obsidian') return 'obsidian';
   if (page === 'claude') return 'claude';
   if (page === 'files') return 'files';
+  if (page === 'search') return 'search';
   return 'dashboard';
 }
 
@@ -85,6 +87,16 @@ function App() {
       />
     );
   }
+  if (view === 'search') {
+    return (
+      <SearchPage
+        onBack={() => {
+          setParams({ page: null, q: null });
+          setView('dashboard');
+        }}
+      />
+    );
+  }
 
   return (
     <Dashboard
@@ -101,6 +113,10 @@ function App() {
       onOpenFiles={() => {
         setParams({ page: 'files' });
         setView('files');
+      }}
+      onOpenSearch={() => {
+        setParams({ page: 'search' });
+        setView('search');
       }}
     />
   );

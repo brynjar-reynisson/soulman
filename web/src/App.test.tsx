@@ -163,4 +163,35 @@ describe('App', () => {
 
     expect(await screen.findByText(/soulman dashboard/i)).toBeInTheDocument();
   });
+
+  it('switches to the search page and back via the header link', async () => {
+    mockUseAuth.mockReturnValue({ user: { email: 'breynisson@gmail.com' }, loading: false, signIn: vi.fn(), signOut: vi.fn() });
+    mockGetStatus.mockResolvedValue({ 'memory-svc': 'up' });
+    const { default: App } = await import('./App');
+    render(<App />);
+    await screen.findByText(/soulman dashboard/i);
+
+    await userEvent.click(screen.getByRole('button', { name: /web-search/i }));
+
+    expect(await screen.findByRole('heading', { name: /web-search/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /soulman/i }));
+
+    expect(await screen.findByText(/soulman dashboard/i)).toBeInTheDocument();
+  });
+
+  it('restores the search page from a page=search URL param on mount', async () => {
+    window.history.replaceState(null, '', '/?page=search');
+    mockUseAuth.mockReturnValue({
+      user: { email: 'breynisson@gmail.com' },
+      loading: false,
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+    });
+    mockGetStatus.mockResolvedValue({ 'memory-svc': 'up' });
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: /web-search/i })).toBeInTheDocument();
+  });
 });
