@@ -16,6 +16,7 @@ import (
 	"soulman/web-svc/auth"
 	"soulman/web-svc/claudesession"
 	"soulman/web-svc/filebrowser"
+	"soulman/web-svc/websearch"
 )
 
 // Config holds the values httpserver needs beyond the port and verifier —
@@ -33,22 +34,32 @@ type Config struct {
 	FileBrowserRoots   []filebrowser.Root
 	ShareLinkSecret    []byte
 	ShareLinkTTL       time.Duration
+	BraveSearchAPIKey  string
+	// BraveSearchBaseURL overrides websearch.DefaultBaseURL when non-empty.
+	// Production leaves this blank; tests set it to an httptest.Server URL.
+	BraveSearchBaseURL string
 }
 
 type Server struct {
-	port       string
-	cfg        Config
-	verifier   *auth.Verifier
-	httpClient *http.Client
-	router     chi.Router
+	port         string
+	cfg          Config
+	verifier     *auth.Verifier
+	httpClient   *http.Client
+	searchClient *websearch.Client
+	router       chi.Router
 }
 
 func New(port string, cfg Config, verifier *auth.Verifier) *Server {
+	baseURL := cfg.BraveSearchBaseURL
+	if baseURL == "" {
+		baseURL = websearch.DefaultBaseURL
+	}
 	s := &Server{
-		port:       port,
-		cfg:        cfg,
-		verifier:   verifier,
-		httpClient: &http.Client{Timeout: 5 * time.Second},
+		port:         port,
+		cfg:          cfg,
+		verifier:     verifier,
+		httpClient:   &http.Client{Timeout: 5 * time.Second},
+		searchClient: websearch.NewClient(cfg.BraveSearchAPIKey, baseURL),
 	}
 	s.router = s.buildRouter()
 	return s
@@ -94,6 +105,7 @@ func (s *Server) buildRouter() chi.Router {
 		r.Get("/api/files/download", s.filesDownload)
 		r.Post("/api/files/upload", s.filesUpload)
 		r.Post("/api/files/share", s.filesShare)
+		r.Get("/api/search", s.search)
 	})
 
 	r.Get("/dl/{token}", s.shareDownload)

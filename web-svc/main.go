@@ -33,6 +33,10 @@ func main() {
 		fileBrowserRoots[i] = filebrowser.Root{Label: r.Label, Path: r.Path}
 	}
 
+	if cfg.BraveSearchAPIKey == "" {
+		slog.Warn("BRAVE_SEARCH_API_KEY not set — web search requests will fail until it's configured")
+	}
+
 	shareLinkSecret := make([]byte, 32)
 	if _, err := rand.Read(shareLinkSecret); err != nil {
 		slog.Error("generating share link secret failed", "error", err)
@@ -51,6 +55,7 @@ func main() {
 		FileBrowserRoots:   fileBrowserRoots,
 		ShareLinkSecret:    shareLinkSecret,
 		ShareLinkTTL:       cfg.ShareLinkTTL,
+		BraveSearchAPIKey:  cfg.BraveSearchAPIKey,
 	}, verifier)
 
 	go func() {
