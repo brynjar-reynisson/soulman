@@ -23,6 +23,7 @@ type Config struct {
 	ClaudeProjectRoots []sharedconfig.ClaudeProjectRoot
 	FileBrowserRoots   []sharedconfig.FileBrowserRoot
 	ShareLinkTTL       time.Duration
+	BraveSearchAPIKey  string
 }
 
 func Load() (*Config, error) {
@@ -92,6 +93,7 @@ func Load() (*Config, error) {
 		ClaudeProjectRoots: shared.Web.ClaudeProjectRoots,
 		FileBrowserRoots:   shared.Web.FileBrowserRoots,
 		ShareLinkTTL:       shareLinkTTL,
+		BraveSearchAPIKey:  env("BRAVE_SEARCH_API_KEY", ""),
 	}, nil
 }
 

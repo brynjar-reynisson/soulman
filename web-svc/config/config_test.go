@@ -379,3 +379,44 @@ func TestLoad_ShareLinkTTLMinutesOverride(t *testing.T) {
 		t.Errorf("ShareLinkTTL = %v, want 15m", cfg.ShareLinkTTL)
 	}
 }
+
+func TestLoad_BraveSearchAPIKeyDefaultsToEmptyString(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, validConfigJSON)
+	os.Setenv("CONFIG_PATH", path)
+	os.Setenv("SUPABASE_URL", "https://example.supabase.co")
+	os.Setenv("SUPABASE_JWT_SECRET", "shh")
+	defer os.Unsetenv("CONFIG_PATH")
+	defer os.Unsetenv("SUPABASE_URL")
+	defer os.Unsetenv("SUPABASE_JWT_SECRET")
+	os.Unsetenv("BRAVE_SEARCH_API_KEY")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v, want no error when BRAVE_SEARCH_API_KEY is unset", err)
+	}
+	if cfg.BraveSearchAPIKey != "" {
+		t.Errorf("BraveSearchAPIKey = %q, want empty string", cfg.BraveSearchAPIKey)
+	}
+}
+
+func TestLoad_BraveSearchAPIKeyEnvOverride(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, validConfigJSON)
+	os.Setenv("CONFIG_PATH", path)
+	os.Setenv("SUPABASE_URL", "https://example.supabase.co")
+	os.Setenv("SUPABASE_JWT_SECRET", "shh")
+	os.Setenv("BRAVE_SEARCH_API_KEY", "brave-test-key")
+	defer os.Unsetenv("CONFIG_PATH")
+	defer os.Unsetenv("SUPABASE_URL")
+	defer os.Unsetenv("SUPABASE_JWT_SECRET")
+	defer os.Unsetenv("BRAVE_SEARCH_API_KEY")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.BraveSearchAPIKey != "brave-test-key" {
+		t.Errorf("BraveSearchAPIKey = %q, want brave-test-key", cfg.BraveSearchAPIKey)
+	}
+}
