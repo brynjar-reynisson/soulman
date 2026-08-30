@@ -6,6 +6,10 @@ Incidents, gotchas, and decisions learned running this service — not captured 
 
 Both are required environment variables (fatal startup error if either is blank), set via `.env` in each of `soulman-dev\` and `soulman-prod\` (loaded by `load-env.ps1`, same as `action-svc`'s Discord token). They must be filled in by hand before `web-svc` will start — the JWT secret is the same Supabase project secret `agent-suite`'s backend already uses (`supabase.jwt-secret` in its `application.yml`), since both apps verify tokens from the same hosted Supabase project.
 
+## BRAVE_SEARCH_API_KEY is also env-only, non-fatal if blank
+
+Same treatment as `DEEPSEEK_API_KEY` in `thinking-svc`, not `SUPABASE_URL`'s fatal-if-blank one: `web-svc` starts fine with it unset (a `slog.Warn` at startup), but any `GET /api/search` request made while it's blank returns `503`. Set via `.env` in `soulman-dev\` and `soulman-prod\`, same file `SUPABASE_URL` lives in. No shared-config (`config/dev.json`/`prod.json`) entry exists for this — it's a secret, not a `web.*` setting.
+
 ## Owner-email check, not a roles table
 
 Unlike `agent-suite`'s `UserResolverFilter` (DB-backed `suite_user`/`user_role` lookup), `web-svc`'s `auth.Verifier` does no database lookup at all — it just compares the JWT's `email` claim against `web.owner_email` in `config/dev.json`/`prod.json`. This is deliberate: Soulman has exactly one real user. If this ever needs multiple authorized users, that's a real design change, not a config tweak.
