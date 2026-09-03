@@ -178,3 +178,78 @@ func (c *DeepSeekClient) ClassifyImportance(ctx context.Context, sender, subject
 
 	return result.Important, result.Reason, nil
 }
+
+type extractEventsResponse struct {
+	Events []schoolEventJSON `json:"events"`
+}
+
+type schoolEventJSON struct {
+	Date        string `json:"date"`
+	HasTime     bool   `json:"has_time"`
+	Time        string `json:"time"`
+	Description string `json:"description"`
+}
+
+// ExtractSchoolEvents sends a single non-streaming Chat Completions request
+// asking for actionable school dates/times. Like ClassifyImportance, this
+// never returns a non-nil error — any failure (network, non-200, malformed
+// response) collapses to (nil events, a "extraction unavailable: ..." note,
+// nil error).
+func (c *DeepSeekClient) ExtractSchoolEvents(ctx context.Context, sender, subject, body string, referenceDate time.Time) ([]SchoolEvent, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+
+	systemPrompt := fmt.Sprintf(schoolEventExtractorSystemPrompt, referenceDate.Format("2006-01-02"))
+	userMsg := fmt.Sprintf("From: %s\nSubject: %s\n\n%s", sender, subject, body)
+
+	reqBody, err := json.Marshal(chatRequest{
+		Model: c.model,
+		Messages: []chatMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: userMsg},
+		},
+		Stream: false,
+	})
+	if err != nil {
+		return nil, fmt.Sprintf("extraction unavailable: marshal request: %v", err), nil
+	}
+
+	url := c.baseURL + "/chat/completions"
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, fmt.Sprintf("extraction unavailable: build request: %v", err), nil
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Sprintf("extraction unavailable: request failed: %v", err), nil
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Sprintf("extraction unavailable: read response: %v", err), nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Sprintf("extraction unavailable: deepseek status %d", resp.StatusCode), nil
+	}
+
+	var parsed chatResponse
+	if err := json.Unmarshal(respBody, &parsed); err != nil || len(parsed.Choices) == 0 {
+		return nil, "extraction unavailable: empty or malformed deepseek response", nil
+	}
+
+	var result extractEventsResponse
+	if err := json.Unmarshal([]byte(parsed.Choices[0].Message.Content), &result); err != nil {
+		return nil, "extraction unavailable: non-JSON extractor response", nil
+	}
+
+	events := make([]SchoolEvent, len(result.Events))
+	for i, e := range result.Events {
+		events[i] = SchoolEvent{Date: e.Date, HasTime: e.HasTime, Time: e.Time, Description: e.Description}
+	}
+	return events, "", nil
+}

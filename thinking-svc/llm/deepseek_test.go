@@ -184,3 +184,86 @@ func TestDeepSeekClient_ClassifyImportance_MalformedJSON_FailsClosed(t *testing.
 		t.Errorf("reason = %q, want it to mention classification unavailable", reason)
 	}
 }
+
+func TestDeepSeekClient_ExtractSchoolEvents_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"events\":[{\"date\":\"2026-09-04\",\"has_time\":false,\"time\":\"\",\"description\":\"Sweater day\"}]}"}}]}`))
+	}))
+	defer srv.Close()
+
+	client := llm.NewDeepSeekClient("test-key", srv.URL, "deepseek-chat", 5*time.Second)
+	ref := time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC)
+	events, note, err := client.ExtractSchoolEvents(context.Background(), "teacher@reykjavik.is", "Reminder", "Don't forget tomorrow is sweater day!", ref)
+	if err != nil {
+		t.Fatalf("ExtractSchoolEvents: %v", err)
+	}
+	if note != "" {
+		t.Errorf("note = %q, want empty on success", note)
+	}
+	if len(events) != 1 {
+		t.Fatalf("events = %v, want 1 entry", events)
+	}
+	if events[0].Date != "2026-09-04" || events[0].HasTime || events[0].Description != "Sweater day" {
+		t.Errorf("events[0] = %+v, want {2026-09-04 false \"\" Sweater day}", events[0])
+	}
+}
+
+func TestDeepSeekClient_ExtractSchoolEvents_EmptyArray_NoEvents(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"choices":[{"message":{"content":"{\"events\":[]}"}}]}`))
+	}))
+	defer srv.Close()
+
+	client := llm.NewDeepSeekClient("test-key", srv.URL, "deepseek-chat", 5*time.Second)
+	events, _, err := client.ExtractSchoolEvents(context.Background(), "info@reykjavik.is", "Notice", "Unrelated municipal notice.", time.Now())
+	if err != nil {
+		t.Fatalf("ExtractSchoolEvents: %v", err)
+	}
+	if len(events) != 0 {
+		t.Errorf("events = %v, want empty", events)
+	}
+}
+
+func TestDeepSeekClient_ExtractSchoolEvents_NonOKStatus_FailsClosed(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"boom"}`))
+	}))
+	defer srv.Close()
+
+	client := llm.NewDeepSeekClient("test-key", srv.URL, "deepseek-chat", 5*time.Second)
+	events, note, err := client.ExtractSchoolEvents(context.Background(), "a@reykjavik.is", "s", "b", time.Now())
+	if err != nil {
+		t.Fatalf("ExtractSchoolEvents must never return an error, got: %v", err)
+	}
+	if events != nil {
+		t.Errorf("events = %v, want nil on failure", events)
+	}
+	if note == "" {
+		t.Error("note = \"\", want a non-empty failure explanation")
+	}
+}
+
+func TestDeepSeekClient_ExtractSchoolEvents_ReferenceDateInPrompt(t *testing.T) {
+	var capturedBody map[string]interface{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&capturedBody)
+		w.Write([]byte(`{"choices":[{"message":{"content":"{\"events\":[]}"}}]}`))
+	}))
+	defer srv.Close()
+
+	client := llm.NewDeepSeekClient("test-key", srv.URL, "deepseek-chat", 5*time.Second)
+	ref := time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC)
+	client.ExtractSchoolEvents(context.Background(), "a@reykjavik.is", "s", "b", ref)
+
+	messages, _ := capturedBody["messages"].([]interface{})
+	if len(messages) == 0 {
+		t.Fatal("no messages captured")
+	}
+	system, _ := messages[0].(map[string]interface{})
+	content, _ := system["content"].(string)
+	if !strings.Contains(content, "2026-08-05") {
+		t.Errorf("system prompt = %q, want it to contain the reference date 2026-08-05", content)
+	}
+}

@@ -1,6 +1,9 @@
 package llm
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Classifier judges whether an email is important enough that the user
 // should look at it as soon as possible, based on its sender, subject, and
@@ -12,6 +15,28 @@ type Classifier interface {
 	ClassifyImportance(ctx context.Context, sender, subject, body string) (important bool, reason string, err error)
 }
 
+// SchoolEvent is one actionable school date/time extracted from an email.
+// Date is always an absolute "YYYY-MM-DD" — the classifier resolves any
+// relative phrase ("this Friday") against the referenceDate it's given,
+// not against real wall-clock time, so a backfilled email from weeks ago
+// resolves correctly. See
+// docs/superpowers/specs/2026-09-03-school-email-events-design.md.
+type SchoolEvent struct {
+	Date        string
+	HasTime     bool
+	Time        string // "HH:MM", only meaningful when HasTime
+	Description string
+}
+
+// SchoolEventExtractor pulls zero or more actionable dates/times out of a
+// school email. Mirrors Classifier's fail-closed convention: production
+// *DeepSeekClient never returns a non-nil error — any failure collapses to
+// (nil events, a "extraction unavailable: ..." note, nil error) so an LLM
+// hiccup never blocks the report entry the caller always writes.
+type SchoolEventExtractor interface {
+	ExtractSchoolEvents(ctx context.Context, sender, subject, body string, referenceDate time.Time) (events []SchoolEvent, note string, err error)
+}
+
 // Client composes both LLM capabilities thinking-svc's rules currently
 // need. Rule.Handle takes a single Client rather than one parameter per
 // capability, so a future rule needing a new LLM capability grows this
@@ -19,6 +44,7 @@ type Classifier interface {
 type Client interface {
 	Summarizer
 	Classifier
+	SchoolEventExtractor
 }
 
 // classifierSystemPrompt is deliberately a plain string constant — the
@@ -39,3 +65,16 @@ Mark as NOT important: newsletters, digests, and marketing email, even if the su
 Reserve important for: genuine deadline-driven or financial/legal matters, a real person needing a response, or a security notification that itself indicates unrecognized/suspicious activity (not a routine confirmation).
 
 Respond with strict JSON only, no markdown and no extra text, in exactly this shape: {"important": true or false, "reason": "<one-sentence reason, under 140 characters>"}.`
+
+// schoolEventExtractorSystemPrompt is a plain string constant, same
+// tuning posture as classifierSystemPrompt. %s is filled with the
+// reference date ("2006-01-02") the caller supplies — see SchoolEvent's
+// doc comment for why that's the email's own received date, not real
+// "now".
+const schoolEventExtractorSystemPrompt = `You extract actionable school dates/times from an email sent by a school or municipal school system. The reference date for resolving relative phrases ("this Friday," "next Tuesday," "tomorrow") is %s — resolve against that date, not any other notion of "today."
+
+Only include events where a child or parent needs to DO something or BE somewhere on a specific date: a special clothing/theme day, a packed-lunch day, a field trip, a meeting, an event with a start time. Do not include general announcements with no specific date, or purely informational content.
+
+If the email is not actually about a school date (e.g. an unrelated municipal notice) or contains no such actionable date, return an empty array.
+
+Respond with strict JSON only, no markdown, exactly this shape: {"events": [{"date": "YYYY-MM-DD", "has_time": true or false, "time": "HH:MM" or "", "description": "<short phrase>"}]}`
