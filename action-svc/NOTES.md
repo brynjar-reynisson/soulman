@@ -56,3 +56,15 @@ See `docs/superpowers/specs/2026-07-27-discord-do-not-disturb-design.md`. Only `
 `Flusher.Start()` also flushes immediately if the process comes up outside the window with stale pending content (e.g. a restart at 11am after an earlier partial day's window already ended), rather than waiting for tomorrow's window-end.
 
 This is the prerequisite for turning `feign_mode` off in prod — flipping that flag is a separate, deliberate deployment decision once DND is verified working in dev (both environments have `do_not_disturb.enabled: true` as of this feature, even though dev's sends are still feigned regardless).
+
+## School event processing (added 2026-09-03)
+
+The `process_school_event` dispatch handler writes a report entry unconditionally, then — if the event's date is in the future (compared against real wall-clock "now," filtering out any backfilled/stale dates from historical sync) — persists it to the local `schoolevents` store (`$SOULMAN_ROOT/logs/school-events/`, one JSON file per event). Each event file tracks `DiscordStatus` and `CalendarStatus` independently, so a partial failure (e.g. Discord succeeds but Calendar fails) never causes a retry to duplicate an already-sent notification.
+
+The `SchoolEventScheduler` wakes daily at the configured `school.notify_time` (default 16:00) plus performs an immediate catch-up on process start (so backfilled events from `soulman school-backfill` are caught and sent the moment `action-svc` restarts). **This is the one Discord-send path in the entire service deliberately exempt from both `feign.Gate` (feign mode) and the do-not-disturb window** — a documented, spec-approved exception for time-critical school notifications.
+
+Calendar invites are sent via a new OAuth scope (`calendar.events`). Setup requires three env vars: `CALENDAR_CLIENT_ID`, `CALENDAR_CLIENT_SECRET`, and `CALENDAR_REFRESH_TOKEN` — all non-fatal if blank (a send failure is logged like any other, and does not prevent the Discord reminder from being sent). Recipient email(s) come from the shared config's `school.calendar_recipient_emails` — no invites are sent until that list is populated.
+
+A hardcoded 2-day stale cutoff filters events during the catch-up on startup: any event already in the store with `start_time` earlier than 2 days ago is not re-sent, even if a calendar send previously failed. This prevents a restart during backlog catchup from re-notifying about events that already happened.
+
+## Leveled logging (log/slog, added 2026-07-27)

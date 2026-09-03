@@ -6,8 +6,9 @@
 - `soulman "<text>"` (no `note`) — general stimulus on the `cli` channel, for future goal-driven reasoning; no rule matches it yet, so today it's only logged to Memory's raw input log.
 - `soulman inject <file> [--dev]` — POSTs a file's raw bytes, unmodified, to `perception-svc`'s `POST /api/perceive/raw` (debugging tool: inject one controlled test stimulus without a real external event triggering it). No client-side JSON validation — the endpoint owns all validation, by design, since this tool's whole point is precise low-level control including intentionally malformed input if the caller wants it.
 - `soulman discord-history --limit N` — reads `DISCORD_BOT_TOKEN`/`DISCORD_CHANNEL_ID` directly from the environment (not through perception-svc), prints recent messages from the "Soulman Reports" bot oldest-first (debugging tool: verify what the pipeline actually sent).
+- `soulman school-backfill --since YYYY-MM-DD [--dry-run]` — one-off historical Gmail scan (no unread/label filter, unlike the live poller) for the school-email-events feature, feeding perception-svc's `POST /api/perceive/raw` debug endpoint. Sets each stimulus's `OccurredAt` from the real historical message date (not now) so relative-date resolution stays correct (see `thinking-svc/NOTES.md`'s school email section).
 
-All four hit `:9001` (prod) by default, `:9011` (`soulman-dev`) with `--dev` — except `discord-history`, which talks directly to Discord's API, not to any soulman service.
+The first four hit `:9001` (prod) by default, `:9011` (`soulman-dev`) with `--dev` — except `discord-history`, which talks directly to Discord's API, not to any soulman service. `school-backfill` also defaults to prod (`:9001`) and respects `--dev` to target dev's perception-svc (`:9011`).
 
 ## Module boundary: deliberate duplication, not a dependency
 
@@ -16,3 +17,7 @@ All four hit `:9001` (prod) by default, `:9011` (`soulman-dev`) with `--dev` —
 ## Gotcha inherited from the injection endpoint
 
 `soulman inject`'s payload is sent through to `perception-svc` unmodified — if your test JSON omits `occurred_at`, the server now defaults it to `received_at` (see `perception-svc/NOTES.md`), but if you're constructing a stimulus for a rule that reads `occurred_at` for something meaningful (e.g. matching a specific historical timestamp), you still need to set it explicitly; the default is just "now," not anything smarter.
+
+## OAuth scope note: school-backfill reuses existing Gmail credentials
+
+`soulman school-backfill` reads historical Gmail messages and feeds them to `perception-svc`. It reuses the existing `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, and `GMAIL_REFRESH_TOKEN` environment variables — no new OAuth scope is needed for reading mail. The school-email-events feature's only new OAuth scope is in `action-svc` for sending Google Calendar invites (`calendar.events`), which is unrelated to `cli`'s backfill tool.

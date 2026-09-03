@@ -34,6 +34,12 @@ There is still no correction/feedback loop for miscalibrated verdicts — descri
 
 Unlike `SystemMonitorRule` (`warning` is not important) or `GmailTriageRule` (DeepSeek judges), `LogErrorRule` always sets `Important: true` — there's no lower tier to distinguish because `logmonitor` only ever publishes `channel: "log-error"` stimuli for `ERROR`-level lines in the first place (`WARN`/`INFO` never reach thinking-svc at all, filtered at the source in `perception-svc/logmonitor`). See `docs/superpowers/specs/2026-07-27-log-error-perception-design.md`.
 
+## School Email rule: prod-only gating and date resolution (added 2026-09-03)
+
+`SchoolEmailRule` matches Gmail senders ending in a configured domain (case-insensitive, default `@reykjavik.is`). It's inserted ahead of the generic `GmailTriageRule` in the rule registry so school emails branch off before importance-triage logic fires. **The rule is prod-only**: `main.go` conditionally prepends it to `rules.Registry` only if `school.enabled` is true in the config AND `school.sender_domains` is non-empty — the registry itself has no built-in per-environment concept, so environment-specific gating must happen at registration time.
+
+The `ExtractSchoolEvents` DeepSeek prompt resolves relative dates and times (e.g. "next Tuesday 10am") against the email's own `received_at` / `OccurredAt` timestamp, not against real "now" — **this is critical for correctness when backfilling historical mail** (see `cli/NOTES.md` for the `school-backfill` tool). A stimulus for an email dated August 15th that says "next Tuesday" should resolve to a date relative to August 15th, not relative to today. If this logic ever changes to use `time.Now()` instead, backfill will break silently, producing incorrect future dates for historical events.
+
 ## Leveled logging (log/slog, added 2026-07-27)
 
 All `log.Printf`/`log.Fatalf` call sites in `main.go` and `natsclient/consumer.go` replaced with stdlib `log/slog` (`slog.Error`/`slog.Warn`/`slog.Info`) — no new dependency. Unparseable stimuli and rule-handling failures (dropped, no redelivery for `soulman.thinking.request`) are `slog.Error`; a blank `DEEPSEEK_API_KEY` (non-fatal, falls back to deterministic summaries) is `slog.Warn`; started/listening/shutting-down messages are `slog.Info`. Startup `log.Fatalf` calls became `slog.Error(...)` followed by an explicit `os.Exit(1)`.
