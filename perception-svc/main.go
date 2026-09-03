@@ -83,10 +83,13 @@ func main() {
 			CriticalThresholdPercent: c.CriticalThresholdPercent,
 		}
 	}
-	sm := sysmonitor.New(smChecks, pub, time.Duration(cfg.SystemMonitorPollIntervalSeconds)*time.Second)
+	sm := sysmonitor.New(smChecks, pub, time.Duration(cfg.SystemMonitorPollIntervalSeconds)*time.Second,
+		time.Duration(cfg.SystemMonitorThresholdGraceMinutes)*time.Minute,
+		time.Duration(cfg.SystemMonitorServiceGraceMinutes)*time.Minute)
 	defer sm.Close()
 	sm.Start(ctx)
-	slog.Info("sysmonitor: started", "checks", len(smChecks), "poll_interval_s", cfg.SystemMonitorPollIntervalSeconds)
+	slog.Info("sysmonitor: started", "checks", len(smChecks), "poll_interval_s", cfg.SystemMonitorPollIntervalSeconds,
+		"threshold_grace_min", cfg.SystemMonitorThresholdGraceMinutes, "service_grace_min", cfg.SystemMonitorServiceGraceMinutes)
 
 	lm, err := logmonitor.New(cfg.LogDir, pub, cfg.LogMonitorCheckpointPath, time.Duration(cfg.LogMonitorReconcileIntervalSeconds)*time.Second)
 	if err != nil {

@@ -16,9 +16,11 @@ import (
 // (golang.org/x/sys/windows — already an indirect dependency of this
 // module via oauth2/nats.go, promoted to direct for this package) for
 // disk, memory, and CPU statistics, and a real TCP/HTTP client for
-// service_health checks.
-func New(checks []CheckConfig, publisher Publisher, interval time.Duration) *Watcher {
-	return newWatcher(&winStats{}, httpTCPHealthChecker{}, checks, publisher, interval)
+// service_health checks. thresholdGracePeriod/serviceGracePeriod are the
+// consecutive-poll hysteresis windows described on Watcher and
+// publishTransition — zero for either means no grace period.
+func New(checks []CheckConfig, publisher Publisher, interval time.Duration, thresholdGracePeriod, serviceGracePeriod time.Duration) *Watcher {
+	return newWatcher(&winStats{}, httpTCPHealthChecker{}, checks, publisher, interval, thresholdGracePeriod, serviceGracePeriod)
 }
 
 // winStats implements statsProvider. CPU usage needs the previous poll's

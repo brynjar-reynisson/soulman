@@ -72,6 +72,22 @@ type GmailConfig struct {
 type SystemMonitorConfig struct {
 	PollIntervalSeconds int           `json:"poll_interval_seconds"`
 	Checks              []CheckConfig `json:"checks"`
+
+	// ThresholdGracePeriodMinutes/ServiceGracePeriodMinutes require a
+	// severity change to be observed on consecutive polls spanning at
+	// least this many minutes before it is actually published — a flip
+	// back to the previously-committed severity before then is discarded
+	// silently. This is hysteresis against flapping (e.g. memory
+	// oscillating around its warning threshold, or a service blipping
+	// down and back up), not a delay on every notification: a change that
+	// stays put still fires, just not on the very first poll that sees
+	// it. Zero/absent means no grace period (publish on the first poll
+	// that observes the new severity), matching this channel's original
+	// behavior. Threshold covers disk_space/memory/cpu; Service covers
+	// service_health and internal_health (both the top-level reachability
+	// check and each reported dependency).
+	ThresholdGracePeriodMinutes int `json:"threshold_grace_period_minutes"`
+	ServiceGracePeriodMinutes   int `json:"service_grace_period_minutes"`
 }
 
 // CheckConfig describes one system-monitor check. CriticalThresholdPercent

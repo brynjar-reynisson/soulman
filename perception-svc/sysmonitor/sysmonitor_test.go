@@ -100,7 +100,7 @@ func serviceCheck(name, target string) CheckConfig {
 func TestPoll_NoThresholdCrossed_NoStimulus(t *testing.T) {
 	stats := &fakeStats{disk: map[string]float64{`C:\`: 50}}
 	pub := &fakePublisher{}
-	w := newWatcher(stats, nil, []CheckConfig{diskCheck(`C:\`)}, pub, time.Hour)
+	w := newWatcher(stats, nil, []CheckConfig{diskCheck(`C:\`)}, pub, time.Hour, 0, 0)
 
 	w.poll(context.Background())
 	w.poll(context.Background())
@@ -113,7 +113,7 @@ func TestPoll_NoThresholdCrossed_NoStimulus(t *testing.T) {
 func TestPoll_CrossesIntoWarning_PublishesOnce(t *testing.T) {
 	stats := &fakeStats{disk: map[string]float64{`C:\`: 50}}
 	pub := &fakePublisher{}
-	w := newWatcher(stats, nil, []CheckConfig{diskCheck(`C:\`)}, pub, time.Hour)
+	w := newWatcher(stats, nil, []CheckConfig{diskCheck(`C:\`)}, pub, time.Hour, 0, 0)
 
 	w.poll(context.Background()) // establishes ok baseline, no stimulus
 	stats.mu.Lock()
@@ -137,7 +137,7 @@ func TestPoll_CrossesIntoWarning_PublishesOnce(t *testing.T) {
 func TestPoll_EscalatesToCriticalThenRecovers(t *testing.T) {
 	stats := &fakeStats{disk: map[string]float64{`C:\`: 50}}
 	pub := &fakePublisher{}
-	w := newWatcher(stats, nil, []CheckConfig{diskCheck(`C:\`)}, pub, time.Hour)
+	w := newWatcher(stats, nil, []CheckConfig{diskCheck(`C:\`)}, pub, time.Hour, 0, 0)
 
 	w.poll(context.Background()) // ok baseline
 
@@ -173,7 +173,7 @@ func TestPoll_EscalatesToCriticalThenRecovers(t *testing.T) {
 func TestPoll_FirstPollAlreadyCritical_PublishesImmediately(t *testing.T) {
 	stats := &fakeStats{disk: map[string]float64{`C:\`: 97}}
 	pub := &fakePublisher{}
-	w := newWatcher(stats, nil, []CheckConfig{diskCheck(`C:\`)}, pub, time.Hour)
+	w := newWatcher(stats, nil, []CheckConfig{diskCheck(`C:\`)}, pub, time.Hour, 0, 0)
 
 	w.poll(context.Background())
 
@@ -189,7 +189,7 @@ func TestPoll_CheckErrorSkipsThatCheckOnly(t *testing.T) {
 		diskCheck(`C:\`),
 		{Type: "memory", WarningThresholdPercent: 85},
 	}
-	w := newWatcher(stats, nil, checks, pub, time.Hour)
+	w := newWatcher(stats, nil, checks, pub, time.Hour, 0, 0)
 
 	w.poll(context.Background())
 
@@ -201,7 +201,7 @@ func TestPoll_CheckErrorSkipsThatCheckOnly(t *testing.T) {
 func TestPoll_PublishFailure_StateNotAdvanced_RetriesNextPoll(t *testing.T) {
 	stats := &fakeStats{disk: map[string]float64{`C:\`: 50}}
 	pub := &fakePublisher{}
-	w := newWatcher(stats, nil, []CheckConfig{diskCheck(`C:\`)}, pub, time.Hour)
+	w := newWatcher(stats, nil, []CheckConfig{diskCheck(`C:\`)}, pub, time.Hour, 0, 0)
 
 	w.poll(context.Background()) // ok baseline
 
@@ -227,7 +227,7 @@ func TestPoll_MultipleDiskPaths_TrackedIndependently(t *testing.T) {
 	stats := &fakeStats{disk: map[string]float64{`C:\`: 50, `D:\`: 97}}
 	pub := &fakePublisher{}
 	checks := []CheckConfig{diskCheck(`C:\`), diskCheck(`D:\`)}
-	w := newWatcher(stats, nil, checks, pub, time.Hour)
+	w := newWatcher(stats, nil, checks, pub, time.Hour, 0, 0)
 
 	w.poll(context.Background())
 
@@ -240,7 +240,7 @@ func TestPoll_CPUNoBaselineFirstCall_SkippedSilently(t *testing.T) {
 	stats := &fakeStats{cpuErr: errNoCPUBaseline}
 	pub := &fakePublisher{}
 	checks := []CheckConfig{{Type: "cpu", WarningThresholdPercent: 90}}
-	w := newWatcher(stats, nil, checks, pub, time.Hour)
+	w := newWatcher(stats, nil, checks, pub, time.Hour, 0, 0)
 
 	w.poll(context.Background())
 	if got := pub.publishedCount(); got != 0 {
@@ -271,7 +271,7 @@ func severityFromStimulus(t *testing.T, s *common.Stimulus) string {
 func TestPoll_ServiceHealth_NoChange_NoStimulus(t *testing.T) {
 	health := &fakeHealth{healthy: map[string]bool{"svc:1234": true}}
 	pub := &fakePublisher{}
-	w := newWatcher(&fakeStats{}, health, []CheckConfig{serviceCheck("svc", "svc:1234")}, pub, time.Hour)
+	w := newWatcher(&fakeStats{}, health, []CheckConfig{serviceCheck("svc", "svc:1234")}, pub, time.Hour, 0, 0)
 
 	w.poll(context.Background())
 	w.poll(context.Background())
@@ -284,7 +284,7 @@ func TestPoll_ServiceHealth_NoChange_NoStimulus(t *testing.T) {
 func TestPoll_ServiceHealth_GoesDownThenRecovers(t *testing.T) {
 	health := &fakeHealth{healthy: map[string]bool{"svc:1234": true}}
 	pub := &fakePublisher{}
-	w := newWatcher(&fakeStats{}, health, []CheckConfig{serviceCheck("svc", "svc:1234")}, pub, time.Hour)
+	w := newWatcher(&fakeStats{}, health, []CheckConfig{serviceCheck("svc", "svc:1234")}, pub, time.Hour, 0, 0)
 
 	w.poll(context.Background()) // healthy baseline, no stimulus
 
@@ -322,7 +322,7 @@ func TestPoll_ServiceHealth_FirstPollAlreadyDown_PublishesImmediately(t *testing
 		detail:  map[string]string{"svc:1234": "dial tcp: i/o timeout"},
 	}
 	pub := &fakePublisher{}
-	w := newWatcher(&fakeStats{}, health, []CheckConfig{serviceCheck("svc", "svc:1234")}, pub, time.Hour)
+	w := newWatcher(&fakeStats{}, health, []CheckConfig{serviceCheck("svc", "svc:1234")}, pub, time.Hour, 0, 0)
 
 	w.poll(context.Background())
 
@@ -334,7 +334,7 @@ func TestPoll_ServiceHealth_FirstPollAlreadyDown_PublishesImmediately(t *testing
 func TestPoll_ServiceHealth_PublishFailure_StateNotAdvanced_RetriesNextPoll(t *testing.T) {
 	health := &fakeHealth{healthy: map[string]bool{"svc:1234": true}}
 	pub := &fakePublisher{}
-	w := newWatcher(&fakeStats{}, health, []CheckConfig{serviceCheck("svc", "svc:1234")}, pub, time.Hour)
+	w := newWatcher(&fakeStats{}, health, []CheckConfig{serviceCheck("svc", "svc:1234")}, pub, time.Hour, 0, 0)
 
 	w.poll(context.Background()) // healthy baseline
 
@@ -359,7 +359,7 @@ func TestPoll_ServiceHealthAndDiskCheck_TrackedIndependently(t *testing.T) {
 	health := &fakeHealth{healthy: map[string]bool{"svc:1234": false}}
 	pub := &fakePublisher{}
 	checks := []CheckConfig{diskCheck(`C:\`), serviceCheck("svc", "svc:1234")}
-	w := newWatcher(stats, health, checks, pub, time.Hour)
+	w := newWatcher(stats, health, checks, pub, time.Hour, 0, 0)
 
 	w.poll(context.Background())
 
@@ -382,7 +382,7 @@ func TestPoll_ServiceHealthAndDiskCheck_TrackedIndependently(t *testing.T) {
 func TestStatus_UpdatesEveryPoll_EvenWithoutTransition(t *testing.T) {
 	stats := &fakeStats{disk: map[string]float64{`C:\`: 50}}
 	pub := &fakePublisher{}
-	w := newWatcher(stats, nil, []CheckConfig{diskCheck(`C:\`)}, pub, time.Hour)
+	w := newWatcher(stats, nil, []CheckConfig{diskCheck(`C:\`)}, pub, time.Hour, 0, 0)
 
 	w.poll(context.Background())
 	first := w.Status()
@@ -419,7 +419,7 @@ func TestStatus_ServiceHealth_ReflectsSeverityAndDetail(t *testing.T) {
 		detail:  map[string]string{"svc:1234": "connection refused"},
 	}
 	pub := &fakePublisher{}
-	w := newWatcher(&fakeStats{}, health, []CheckConfig{serviceCheck("svc", "svc:1234")}, pub, time.Hour)
+	w := newWatcher(&fakeStats{}, health, []CheckConfig{serviceCheck("svc", "svc:1234")}, pub, time.Hour, 0, 0)
 
 	w.poll(context.Background())
 
@@ -444,7 +444,7 @@ func TestStatus_ServiceHealth_ReflectsSeverityAndDetail(t *testing.T) {
 func TestStatus_ServiceHealth_HealthyHasNoDetail(t *testing.T) {
 	health := &fakeHealth{healthy: map[string]bool{"svc:1234": true}}
 	pub := &fakePublisher{}
-	w := newWatcher(&fakeStats{}, health, []CheckConfig{serviceCheck("svc", "svc:1234")}, pub, time.Hour)
+	w := newWatcher(&fakeStats{}, health, []CheckConfig{serviceCheck("svc", "svc:1234")}, pub, time.Hour, 0, 0)
 
 	w.poll(context.Background())
 
@@ -458,7 +458,7 @@ func TestStatus_SortedByKey(t *testing.T) {
 	stats := &fakeStats{disk: map[string]float64{`C:\`: 50, `D:\`: 50}}
 	pub := &fakePublisher{}
 	checks := []CheckConfig{diskCheck(`D:\`), diskCheck(`C:\`)} // intentionally out of order
-	w := newWatcher(stats, nil, checks, pub, time.Hour)
+	w := newWatcher(stats, nil, checks, pub, time.Hour, 0, 0)
 
 	w.poll(context.Background())
 
@@ -513,7 +513,7 @@ func TestInternalHealth_Unreachable_PublishesCritical(t *testing.T) {
 	internal := &fakeInternalHealth{}
 	internal.setErr("http://memory-svc/health", errors.New("connection refused"))
 
-	w := newWatcher(&fakeStats{}, nil, []CheckConfig{internalHealthCheck("memory-svc", "http://memory-svc/health")}, pub, time.Hour)
+	w := newWatcher(&fakeStats{}, nil, []CheckConfig{internalHealthCheck("memory-svc", "http://memory-svc/health")}, pub, time.Hour, 0, 0)
 	w.internalHealth = internal
 
 	w.poll(context.Background())
@@ -531,7 +531,7 @@ func TestInternalHealth_DependencyDown_PublishesCritical(t *testing.T) {
 		Dependencies: map[string]internalHealthDependency{"postgres": {Status: "down", Detail: "connection refused"}},
 	})
 
-	w := newWatcher(&fakeStats{}, nil, []CheckConfig{internalHealthCheck("memory-svc", "http://memory-svc/health")}, pub, time.Hour)
+	w := newWatcher(&fakeStats{}, nil, []CheckConfig{internalHealthCheck("memory-svc", "http://memory-svc/health")}, pub, time.Hour, 0, 0)
 	w.internalHealth = internal
 
 	w.poll(context.Background())
@@ -552,7 +552,7 @@ func TestInternalHealth_DependencyRecovers_PublishesRecovery(t *testing.T) {
 		Dependencies: map[string]internalHealthDependency{"postgres": {Status: "down", Detail: "connection refused"}},
 	})
 
-	w := newWatcher(&fakeStats{}, nil, []CheckConfig{internalHealthCheck("memory-svc", "http://memory-svc/health")}, pub, time.Hour)
+	w := newWatcher(&fakeStats{}, nil, []CheckConfig{internalHealthCheck("memory-svc", "http://memory-svc/health")}, pub, time.Hour, 0, 0)
 	w.internalHealth = internal
 
 	w.poll(context.Background()) // postgres down: 1 publish
@@ -576,7 +576,7 @@ func TestInternalHealth_SteadyState_NoRepeatPublish(t *testing.T) {
 		Dependencies: map[string]internalHealthDependency{"postgres": {Status: "down", Detail: "connection refused"}},
 	})
 
-	w := newWatcher(&fakeStats{}, nil, []CheckConfig{internalHealthCheck("memory-svc", "http://memory-svc/health")}, pub, time.Hour)
+	w := newWatcher(&fakeStats{}, nil, []CheckConfig{internalHealthCheck("memory-svc", "http://memory-svc/health")}, pub, time.Hour, 0, 0)
 	w.internalHealth = internal
 
 	w.poll(context.Background())
@@ -588,12 +588,265 @@ func TestInternalHealth_SteadyState_NoRepeatPublish(t *testing.T) {
 	}
 }
 
+func TestPoll_ThresholdGracePeriod_NotSustained_NoPublish(t *testing.T) {
+	stats := &fakeStats{disk: map[string]float64{`C:\`: 50}}
+	pub := &fakePublisher{}
+	// interval=10min, thresholdGracePeriod=20min -> gracePolls=2: one poll
+	// at the new severity must not be enough on its own.
+	w := newWatcher(stats, nil, []CheckConfig{diskCheck(`C:\`)}, pub, 10*time.Minute, 20*time.Minute, 0)
+
+	w.poll(context.Background()) // ok baseline
+
+	stats.mu.Lock()
+	stats.disk[`C:\`] = 85
+	stats.mu.Unlock()
+	w.poll(context.Background()) // ok -> warning, 1st sighting: not sustained yet
+
+	if got := pub.publishedCount(); got != 0 {
+		t.Fatalf("published = %d, want 0 (grace period not yet satisfied)", got)
+	}
+}
+
+func TestPoll_ThresholdGracePeriod_Sustained_PublishesOnceThresholdMet(t *testing.T) {
+	stats := &fakeStats{disk: map[string]float64{`C:\`: 50}}
+	pub := &fakePublisher{}
+	w := newWatcher(stats, nil, []CheckConfig{diskCheck(`C:\`)}, pub, 10*time.Minute, 20*time.Minute, 0)
+
+	w.poll(context.Background()) // ok baseline
+
+	stats.mu.Lock()
+	stats.disk[`C:\`] = 85
+	stats.mu.Unlock()
+	w.poll(context.Background()) // warning sighting 1/2
+	w.poll(context.Background()) // warning sighting 2/2 -> publishes
+
+	if got := pub.publishedCount(); got != 1 {
+		t.Fatalf("published = %d, want 1 (sustained for gracePolls consecutive polls)", got)
+	}
+
+	w.poll(context.Background()) // still warning, steady state: no repeat
+	if got := pub.publishedCount(); got != 1 {
+		t.Errorf("published = %d after steady warning poll, want still 1", got)
+	}
+}
+
+func TestPoll_ThresholdGracePeriod_FlipsBackBeforeSustained_DiscardedSilently(t *testing.T) {
+	stats := &fakeStats{disk: map[string]float64{`C:\`: 50}}
+	pub := &fakePublisher{}
+	w := newWatcher(stats, nil, []CheckConfig{diskCheck(`C:\`)}, pub, 10*time.Minute, 30*time.Minute, 0)
+
+	w.poll(context.Background()) // ok baseline
+
+	stats.mu.Lock()
+	stats.disk[`C:\`] = 85
+	stats.mu.Unlock()
+	w.poll(context.Background()) // warning sighting 1/3
+
+	stats.mu.Lock()
+	stats.disk[`C:\`] = 50
+	stats.mu.Unlock()
+	w.poll(context.Background()) // flips back to ok before warning was sustained
+
+	if got := pub.publishedCount(); got != 0 {
+		t.Fatalf("published = %d, want 0 (transient blip discarded, never sustained)", got)
+	}
+
+	// A fresh warning excursion afterward needs its own full gracePolls —
+	// the earlier partial count must not have carried over.
+	stats.mu.Lock()
+	stats.disk[`C:\`] = 85
+	stats.mu.Unlock()
+	w.poll(context.Background()) // warning sighting 1/3 (again)
+	w.poll(context.Background()) // warning sighting 2/3
+	if got := pub.publishedCount(); got != 0 {
+		t.Fatalf("published = %d, want 0 (only 2 of 3 required sightings so far)", got)
+	}
+	w.poll(context.Background()) // warning sighting 3/3 -> publishes
+	if got := pub.publishedCount(); got != 1 {
+		t.Fatalf("published = %d, want 1", got)
+	}
+}
+
+func TestPoll_ThresholdGracePeriod_ZeroMeansImmediate(t *testing.T) {
+	stats := &fakeStats{disk: map[string]float64{`C:\`: 50}}
+	pub := &fakePublisher{}
+	w := newWatcher(stats, nil, []CheckConfig{diskCheck(`C:\`)}, pub, 10*time.Minute, 0, 0)
+
+	w.poll(context.Background()) // ok baseline
+
+	stats.mu.Lock()
+	stats.disk[`C:\`] = 85
+	stats.mu.Unlock()
+	w.poll(context.Background()) // ok -> warning
+
+	if got := pub.publishedCount(); got != 1 {
+		t.Fatalf("published = %d, want 1 (zero grace period means publish on first poll, unchanged original behavior)", got)
+	}
+}
+
+func TestPoll_ServiceHealthGracePeriod_NotSustained_NoPublish(t *testing.T) {
+	health := &fakeHealth{healthy: map[string]bool{"svc:1234": true}}
+	pub := &fakePublisher{}
+	w := newWatcher(&fakeStats{}, health, []CheckConfig{serviceCheck("svc", "svc:1234")}, pub, 10*time.Minute, 0, 20*time.Minute)
+
+	w.poll(context.Background()) // healthy baseline
+
+	health.set("svc:1234", false, "connection refused")
+	w.poll(context.Background()) // down sighting 1/2: not sustained yet
+
+	if got := pub.publishedCount(); got != 0 {
+		t.Fatalf("published = %d, want 0 (service grace period not yet satisfied)", got)
+	}
+}
+
+func TestPoll_ServiceHealthGracePeriod_FlapsUpAndDown_NeverSustained_NoPublish(t *testing.T) {
+	health := &fakeHealth{healthy: map[string]bool{"svc:1234": true}}
+	pub := &fakePublisher{}
+	w := newWatcher(&fakeStats{}, health, []CheckConfig{serviceCheck("svc", "svc:1234")}, pub, 10*time.Minute, 0, 20*time.Minute)
+
+	w.poll(context.Background()) // healthy baseline
+
+	health.set("svc:1234", false, "connection refused")
+	w.poll(context.Background()) // down 1/2
+
+	health.set("svc:1234", true, "")
+	w.poll(context.Background()) // back up before sustained: discarded, still committed "ok"
+
+	health.set("svc:1234", false, "connection refused")
+	w.poll(context.Background()) // down 1/2 again (fresh count)
+
+	if got := pub.publishedCount(); got != 0 {
+		t.Fatalf("published = %d, want 0 (flapping never sustains for gracePolls)", got)
+	}
+}
+
+func TestPoll_ServiceHealthGracePeriod_Sustained_PublishesDownThenRecovery(t *testing.T) {
+	health := &fakeHealth{healthy: map[string]bool{"svc:1234": true}}
+	pub := &fakePublisher{}
+	w := newWatcher(&fakeStats{}, health, []CheckConfig{serviceCheck("svc", "svc:1234")}, pub, 10*time.Minute, 0, 20*time.Minute)
+
+	w.poll(context.Background()) // healthy baseline
+
+	health.set("svc:1234", false, "connection refused")
+	w.poll(context.Background()) // down 1/2
+	w.poll(context.Background()) // down 2/2 -> publishes
+
+	if got := pub.publishedCount(); got != 1 {
+		t.Fatalf("published = %d, want 1 (down sustained)", got)
+	}
+
+	health.set("svc:1234", true, "")
+	w.poll(context.Background()) // recovered 1/2
+	if got := pub.publishedCount(); got != 1 {
+		t.Fatalf("published = %d, want still 1 (recovery not yet sustained)", got)
+	}
+	w.poll(context.Background()) // recovered 2/2 -> publishes recovery
+	if got := pub.publishedCount(); got != 2 {
+		t.Fatalf("published = %d, want 2 (down + sustained recovery)", got)
+	}
+}
+
+func TestPoll_ThresholdAndServiceGracePeriods_AreIndependent(t *testing.T) {
+	stats := &fakeStats{disk: map[string]float64{`C:\`: 50}}
+	health := &fakeHealth{healthy: map[string]bool{"svc:1234": true}}
+	pub := &fakePublisher{}
+	checks := []CheckConfig{diskCheck(`C:\`), serviceCheck("svc", "svc:1234")}
+	// thresholdGracePeriod=0 (immediate), serviceGracePeriod=20min (2 polls).
+	w := newWatcher(stats, health, checks, pub, 10*time.Minute, 0, 20*time.Minute)
+
+	w.poll(context.Background()) // both baselines ok/healthy
+
+	stats.mu.Lock()
+	stats.disk[`C:\`] = 85
+	stats.mu.Unlock()
+	health.set("svc:1234", false, "connection refused")
+	w.poll(context.Background()) // disk fires immediately; service down 1/2, not yet
+
+	if got := pub.publishedCount(); got != 1 {
+		t.Fatalf("published = %d, want 1 (only the immediate-grace disk check)", got)
+	}
+
+	w.poll(context.Background()) // service down 2/2 -> publishes
+	if got := pub.publishedCount(); got != 2 {
+		t.Fatalf("published = %d, want 2 (service check catches up once sustained)", got)
+	}
+}
+
+func TestGracePollsFor_ConvertsMinutesToConsecutivePollCount(t *testing.T) {
+	w := &Watcher{interval: 5 * time.Minute}
+
+	if got := w.gracePollsFor(0); got != 1 {
+		t.Errorf("gracePollsFor(0) = %d, want 1 (no grace period)", got)
+	}
+	if got := w.gracePollsFor(-time.Minute); got != 1 {
+		t.Errorf("gracePollsFor(negative) = %d, want 1", got)
+	}
+	if got := w.gracePollsFor(15 * time.Minute); got != 3 {
+		t.Errorf("gracePollsFor(15min) with 5min interval = %d, want 3", got)
+	}
+	if got := w.gracePollsFor(16 * time.Minute); got != 4 {
+		t.Errorf("gracePollsFor(16min) with 5min interval = %d, want 4 (rounds up)", got)
+	}
+	if got := w.gracePollsFor(1 * time.Minute); got != 1 {
+		t.Errorf("gracePollsFor(1min) with 5min interval = %d, want 1 (rounds up to at least one poll)", got)
+	}
+}
+
+func TestInternalHealth_DependencyGracePeriod_NotSustained_NoPublish(t *testing.T) {
+	pub := &fakePublisher{}
+	internal := &fakeInternalHealth{}
+	internal.setBody("http://memory-svc/health", &internalHealthBody{
+		Status:       "ok",
+		Dependencies: map[string]internalHealthDependency{"postgres": {Status: "ok"}},
+	})
+
+	w := newWatcher(&fakeStats{}, nil, []CheckConfig{internalHealthCheck("memory-svc", "http://memory-svc/health")}, pub, 10*time.Minute, 0, 20*time.Minute)
+	w.internalHealth = internal
+
+	w.poll(context.Background()) // baseline: process ok, postgres ok — nothing to publish
+
+	internal.setBody("http://memory-svc/health", &internalHealthBody{
+		Status:       "degraded",
+		Dependencies: map[string]internalHealthDependency{"postgres": {Status: "down", Detail: "connection refused"}},
+	})
+	w.poll(context.Background()) // postgres down 1/2: not sustained yet
+
+	if pub.publishedCount() != 0 {
+		t.Fatalf("published = %d, want 0 (dependency grace period not yet satisfied)", pub.publishedCount())
+	}
+}
+
+func TestInternalHealth_DependencyGracePeriod_Sustained_Publishes(t *testing.T) {
+	pub := &fakePublisher{}
+	internal := &fakeInternalHealth{}
+	internal.setBody("http://memory-svc/health", &internalHealthBody{
+		Status:       "ok",
+		Dependencies: map[string]internalHealthDependency{"postgres": {Status: "ok"}},
+	})
+
+	w := newWatcher(&fakeStats{}, nil, []CheckConfig{internalHealthCheck("memory-svc", "http://memory-svc/health")}, pub, 10*time.Minute, 0, 20*time.Minute)
+	w.internalHealth = internal
+
+	w.poll(context.Background()) // baseline
+
+	internal.setBody("http://memory-svc/health", &internalHealthBody{
+		Status:       "degraded",
+		Dependencies: map[string]internalHealthDependency{"postgres": {Status: "down", Detail: "connection refused"}},
+	})
+	w.poll(context.Background()) // postgres down 1/2
+	w.poll(context.Background()) // postgres down 2/2 -> publishes
+
+	if pub.publishedCount() != 1 {
+		t.Fatalf("published = %d, want 1 (dependency down sustained)", pub.publishedCount())
+	}
+}
+
 func TestInternalHealth_ProcessUnreachable_And_DependencyDown_AreIndependentKeys(t *testing.T) {
 	pub := &fakePublisher{}
 	internal := &fakeInternalHealth{}
 	internal.setErr("http://memory-svc/health", errors.New("connection refused"))
 
-	w := newWatcher(&fakeStats{}, nil, []CheckConfig{internalHealthCheck("memory-svc", "http://memory-svc/health")}, pub, time.Hour)
+	w := newWatcher(&fakeStats{}, nil, []CheckConfig{internalHealthCheck("memory-svc", "http://memory-svc/health")}, pub, time.Hour, 0, 0)
 	w.internalHealth = internal
 
 	w.poll(context.Background()) // unreachable: 1 publish (key: internal_health:memory-svc)

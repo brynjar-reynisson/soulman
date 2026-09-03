@@ -83,10 +83,20 @@ type CheckStatus struct {
 	CheckedAt    time.Time `json:"checked_at"`
 }
 
-// Watcher polls the configured checks and publishes a Stimulus on each
-// severity transition. State is in-memory only (see design spec) — a
-// restart resets every check to "ok", so a still-bad condition re-fires
-// once more, an accepted tradeoff simpler than a persisted checkpoint.
+// pendingTransition tracks a severity not yet sustained long enough to
+// publish — see publishTransition.
+type pendingTransition struct {
+	severity severity
+	count    int
+}
+
+// Watcher polls the configured checks and publishes a Stimulus once a
+// severity transition has been observed for gracePolls consecutive polls
+// (see publishTransition) — thresholdGracePeriod/serviceGracePeriod convert
+// to a poll count via gracePollsFor, using interval. State is in-memory
+// only (see design spec) — a restart resets every check to "ok", so a
+// still-bad condition re-fires once more, an accepted tradeoff simpler than
+// a persisted checkpoint.
 type Watcher struct {
 	checks         []CheckConfig
 	stats          statsProvider
@@ -95,7 +105,11 @@ type Watcher struct {
 	publisher      Publisher
 	interval       time.Duration
 
-	state map[string]severity
+	thresholdGracePeriod time.Duration // disk_space/memory/cpu
+	serviceGracePeriod   time.Duration // service_health/internal_health
+
+	state   map[string]severity
+	pending map[string]pendingTransition
 
 	mu     sync.Mutex
 	status map[string]CheckStatus
@@ -103,17 +117,34 @@ type Watcher struct {
 	cancel context.CancelFunc
 }
 
-func newWatcher(stats statsProvider, health healthChecker, checks []CheckConfig, publisher Publisher, interval time.Duration) *Watcher {
+func newWatcher(stats statsProvider, health healthChecker, checks []CheckConfig, publisher Publisher, interval time.Duration, thresholdGracePeriod, serviceGracePeriod time.Duration) *Watcher {
 	return &Watcher{
-		checks:         checks,
-		stats:          stats,
-		health:         health,
-		internalHealth: httpInternalHealthChecker{},
-		publisher:      publisher,
-		interval:       interval,
-		state:          map[string]severity{},
-		status:         map[string]CheckStatus{},
+		checks:               checks,
+		stats:                stats,
+		health:               health,
+		internalHealth:       httpInternalHealthChecker{},
+		publisher:            publisher,
+		interval:             interval,
+		thresholdGracePeriod: thresholdGracePeriod,
+		serviceGracePeriod:   serviceGracePeriod,
+		state:                map[string]severity{},
+		pending:              map[string]pendingTransition{},
+		status:               map[string]CheckStatus{},
 	}
+}
+
+// gracePollsFor converts a grace-period duration to a minimum consecutive
+// poll count: <=0 means no grace period (1 — publish on the very first
+// poll that observes the new severity, today's original behavior).
+func (w *Watcher) gracePollsFor(d time.Duration) int {
+	if d <= 0 || w.interval <= 0 {
+		return 1
+	}
+	polls := int((d + w.interval - 1) / w.interval) // ceil
+	if polls < 1 {
+		return 1
+	}
+	return polls
 }
 
 func (w *Watcher) recordStatus(key string, s CheckStatus) {
@@ -245,7 +276,7 @@ func (w *Watcher) runCheck(ctx context.Context, c CheckConfig) {
 			status.Detail = detail
 		}
 		w.recordStatus(key, status)
-		w.publishTransition(ctx, key, sev, func() *common.Stimulus {
+		w.publishTransition(ctx, key, sev, w.gracePollsFor(w.serviceGracePeriod), func() *common.Stimulus {
 			return buildServiceHealthStimulus(c, sev, detail)
 		})
 		return
@@ -273,7 +304,7 @@ func (w *Watcher) runCheck(ctx context.Context, c CheckConfig) {
 		ValuePercent: &value,
 		CheckedAt:    time.Now().UTC(),
 	})
-	w.publishTransition(ctx, key, sev, func() *common.Stimulus {
+	w.publishTransition(ctx, key, sev, w.gracePollsFor(w.thresholdGracePeriod), func() *common.Stimulus {
 		return buildStimulus(c, value, sev)
 	})
 }
@@ -296,7 +327,7 @@ func (w *Watcher) runInternalHealthCheck(ctx context.Context, c CheckConfig) {
 		detail := err.Error()
 		status := CheckStatus{Type: c.Type, Key: c.Name, Severity: string(severityCritical), Detail: detail, CheckedAt: time.Now().UTC()}
 		w.recordStatus(key, status)
-		w.publishTransition(ctx, key, severityCritical, func() *common.Stimulus {
+		w.publishTransition(ctx, key, severityCritical, w.gracePollsFor(w.serviceGracePeriod), func() *common.Stimulus {
 			return buildServiceHealthStimulus(c, severityCritical, detail)
 		})
 		return
@@ -304,7 +335,7 @@ func (w *Watcher) runInternalHealthCheck(ctx context.Context, c CheckConfig) {
 
 	okStatus := CheckStatus{Type: c.Type, Key: c.Name, Severity: string(severityOK), CheckedAt: time.Now().UTC()}
 	w.recordStatus(key, okStatus)
-	w.publishTransition(ctx, key, severityOK, func() *common.Stimulus {
+	w.publishTransition(ctx, key, severityOK, w.gracePollsFor(w.serviceGracePeriod), func() *common.Stimulus {
 		return buildServiceHealthStimulus(c, severityOK, "")
 	})
 
@@ -326,7 +357,7 @@ func (w *Watcher) runInternalHealthCheck(ctx context.Context, c CheckConfig) {
 			depStatus.Detail = dep.Detail
 		}
 		w.recordStatus(depKey, depStatus)
-		w.publishTransition(ctx, depKey, sev, func() *common.Stimulus {
+		w.publishTransition(ctx, depKey, sev, w.gracePollsFor(w.serviceGracePeriod), func() *common.Stimulus {
 			return buildInternalHealthStimulus(c, depName, sev, dep.Detail)
 		})
 	}
@@ -334,23 +365,43 @@ func (w *Watcher) runInternalHealthCheck(ctx context.Context, c CheckConfig) {
 
 // publishTransition holds the edge-triggered state machine every check
 // type shares: no stimulus on a steady state, no stimulus on a healthy/ok
-// first sighting (baseline only), publish on any other transition, and
-// leave state unadvanced (so the transition retries next poll) if the
-// publish itself fails.
-func (w *Watcher) publishTransition(ctx context.Context, key string, sev severity, build func() *common.Stimulus) {
+// first sighting (baseline only), and otherwise requires the new severity
+// to be observed on gracePolls consecutive polls before it publishes and
+// commits — a flip back to the previously-committed severity before then
+// discards the pending observation with no stimulus at all (the hysteresis
+// that kills flapping noise). gracePolls == 1 reproduces the original
+// immediate-publish behavior exactly (the pending count reaches 1 on the
+// very first poll that sees the new severity). If the publish itself
+// fails, neither state nor pending advances, so the transition is retried
+// next poll without losing the sustained-count progress already made.
+func (w *Watcher) publishTransition(ctx context.Context, key string, sev severity, gracePolls int, build func() *common.Stimulus) {
 	prev, seen := w.state[key]
 	if seen && prev == sev {
+		delete(w.pending, key)
 		return
 	}
 	if !seen && sev == severityOK {
 		w.state[key] = sev
+		delete(w.pending, key)
+		return
+	}
+
+	p := w.pending[key]
+	if p.severity != sev {
+		p = pendingTransition{severity: sev}
+	}
+	p.count++
+	if p.count < gracePolls {
+		w.pending[key] = p
 		return
 	}
 	if err := w.publisher.Publish(ctx, build()); err != nil {
 		slog.Error("sysmonitor: publish failed, state unchanged, will retry next poll", "check", key, "error", err)
+		w.pending[key] = p
 		return
 	}
 	w.state[key] = sev
+	delete(w.pending, key)
 }
 
 func checkLabel(c CheckConfig) string {

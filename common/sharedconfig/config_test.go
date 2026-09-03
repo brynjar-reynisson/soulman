@@ -268,6 +268,43 @@ func TestLoad_SystemMonitorFields(t *testing.T) {
 	if mem.Type != "memory" || mem.WarningThresholdPercent != 85 || mem.CriticalThresholdPercent != 0 {
 		t.Errorf("Checks[1] = %+v, want memory 85/0 (no critical tier)", mem)
 	}
+	if cfg.SystemMonitor.ThresholdGracePeriodMinutes != 0 {
+		t.Errorf("SystemMonitor.ThresholdGracePeriodMinutes = %d, want 0 when absent from JSON", cfg.SystemMonitor.ThresholdGracePeriodMinutes)
+	}
+	if cfg.SystemMonitor.ServiceGracePeriodMinutes != 0 {
+		t.Errorf("SystemMonitor.ServiceGracePeriodMinutes = %d, want 0 when absent from JSON", cfg.SystemMonitor.ServiceGracePeriodMinutes)
+	}
+}
+
+func TestLoad_SystemMonitorGracePeriodFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	content := `{
+		"watch_paths": ["C:\\a\\errors"],
+		"system_monitor": {
+			"poll_interval_seconds": 300,
+			"threshold_grace_period_minutes": 15,
+			"service_grace_period_minutes": 20,
+			"checks": [
+				{"type": "memory", "warning_threshold_percent": 85}
+			]
+		}
+	}`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cfg, err := sharedconfig.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.SystemMonitor.ThresholdGracePeriodMinutes != 15 {
+		t.Errorf("SystemMonitor.ThresholdGracePeriodMinutes = %d, want 15", cfg.SystemMonitor.ThresholdGracePeriodMinutes)
+	}
+	if cfg.SystemMonitor.ServiceGracePeriodMinutes != 20 {
+		t.Errorf("SystemMonitor.ServiceGracePeriodMinutes = %d, want 20", cfg.SystemMonitor.ServiceGracePeriodMinutes)
+	}
 }
 
 func TestLoad_SystemMonitorServiceHealthFields(t *testing.T) {

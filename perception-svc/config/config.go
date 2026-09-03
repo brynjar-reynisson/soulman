@@ -24,8 +24,10 @@ type Config struct {
 	GmailSeenLabel           string
 	GmailPollIntervalSeconds int
 
-	SystemMonitorPollIntervalSeconds int
-	SystemMonitorChecks              []sharedconfig.CheckConfig
+	SystemMonitorPollIntervalSeconds   int
+	SystemMonitorChecks                []sharedconfig.CheckConfig
+	SystemMonitorThresholdGraceMinutes int
+	SystemMonitorServiceGraceMinutes   int
 
 	LogDir                             string
 	LogMonitorCheckpointPath           string
@@ -118,8 +120,10 @@ func Load() (*Config, error) {
 		GmailSeenLabel:           shared.Gmail.SeenLabel,
 		GmailPollIntervalSeconds: shared.Gmail.PollIntervalSeconds,
 
-		SystemMonitorPollIntervalSeconds: shared.SystemMonitor.PollIntervalSeconds,
-		SystemMonitorChecks:              shared.SystemMonitor.Checks,
+		SystemMonitorPollIntervalSeconds:   shared.SystemMonitor.PollIntervalSeconds,
+		SystemMonitorChecks:                shared.SystemMonitor.Checks,
+		SystemMonitorThresholdGraceMinutes: shared.SystemMonitor.ThresholdGracePeriodMinutes,
+		SystemMonitorServiceGraceMinutes:   shared.SystemMonitor.ServiceGracePeriodMinutes,
 
 		// LOG_DIR is not currently set by perception-svc's run-perception-svc.ps1
 		// launchers in soulman-dev/soulman-prod (verified against the live

@@ -25,8 +25,10 @@ type checkFields struct {
 }
 
 type systemMonitorFields struct {
-	PollIntervalSeconds int           `json:"poll_interval_seconds"`
-	Checks              []checkFields `json:"checks"`
+	PollIntervalSeconds         int           `json:"poll_interval_seconds"`
+	Checks                      []checkFields `json:"checks"`
+	ThresholdGracePeriodMinutes int           `json:"threshold_grace_period_minutes,omitempty"`
+	ServiceGracePeriodMinutes   int           `json:"service_grace_period_minutes,omitempty"`
 }
 
 type logMonitorFields struct {
@@ -152,6 +154,12 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 	if len(cfg.SystemMonitorChecks) != 1 || cfg.SystemMonitorChecks[0].Type != "disk_space" {
 		t.Errorf("SystemMonitorChecks = %+v, want one disk_space check", cfg.SystemMonitorChecks)
+	}
+	if cfg.SystemMonitorThresholdGraceMinutes != 0 {
+		t.Errorf("SystemMonitorThresholdGraceMinutes = %d, want 0 when absent from JSON", cfg.SystemMonitorThresholdGraceMinutes)
+	}
+	if cfg.SystemMonitorServiceGraceMinutes != 0 {
+		t.Errorf("SystemMonitorServiceGraceMinutes = %d, want 0 when absent from JSON", cfg.SystemMonitorServiceGraceMinutes)
 	}
 	if cfg.LogDir != "./logs" {
 		t.Errorf("LogDir = %q, want ./logs", cfg.LogDir)
@@ -364,6 +372,28 @@ func TestLoad_EmptySystemMonitorChecks_ReturnsError(t *testing.T) {
 	_, err := config.Load()
 	if err == nil {
 		t.Fatal("Load: want error for empty system_monitor.checks, got nil")
+	}
+}
+
+func TestLoad_SystemMonitorGracePeriods_PopulatedFromSharedConfig(t *testing.T) {
+	unsetAllEnv()
+	defer unsetAllEnv()
+
+	sysMon := validSystemMonitor
+	sysMon.ThresholdGracePeriodMinutes = 15
+	sysMon.ServiceGracePeriodMinutes = 20
+	configPath := writeConfigFile(t, []string{`C:\a\errors`}, "nats://localhost:4222", "soulman.stimulus.raw", validGmail, sysMon, validLogMonitor)
+	os.Setenv("CONFIG_PATH", configPath)
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.SystemMonitorThresholdGraceMinutes != 15 {
+		t.Errorf("SystemMonitorThresholdGraceMinutes = %d, want 15", cfg.SystemMonitorThresholdGraceMinutes)
+	}
+	if cfg.SystemMonitorServiceGraceMinutes != 20 {
+		t.Errorf("SystemMonitorServiceGraceMinutes = %d, want 20", cfg.SystemMonitorServiceGraceMinutes)
 	}
 }
 
