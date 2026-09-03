@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"soulman/action-svc/audit"
 	"soulman/action-svc/calendar"
 	"soulman/action-svc/config"
 	"soulman/action-svc/dispatch"
@@ -50,19 +51,27 @@ func main() {
 	}
 	notifier = feign.WrapNotifier(gate, notifier)
 
+	// Audit log — one JSONL line per Discord send attempt (what, when, and
+	// why — see action-svc/audit and action-svc/NOTES.md), tagged per
+	// origin below. Shared across every reason so concurrent sends from
+	// different subsystems never interleave partial writes.
+	auditLog := audit.New(filepath.Join(cfg.SoulmanRoot, "logs", "discord-audit.jsonl"))
+	dailyNotifier := audit.Wrap(auditLog, notifier, "daily-digest")
+	batchRealNotifier := audit.Wrap(auditLog, notifier, "important-batch")
+
 	// Do-not-disturb window — see
 	// docs/superpowers/specs/2026-07-27-discord-do-not-disturb-design.md.
 	// Only the Batcher's real-time notification path is gated; the daily
-	// digest cron (sched, below) keeps using the plain feign-wrapped
+	// digest cron (sched, below) keeps using its own audit-wrapped
 	// notifier, unaffected by DND. If DNDEnabled is false, batcherNotifier
-	// stays the same plain notifier sched uses — behavior identical to
-	// pre-DND.
+	// stays the plain (audit-wrapped, feign-wrapped) batchRealNotifier —
+	// behavior identical to pre-DND.
 	dndWindow := dnd.Window{Start: cfg.DNDStart, End: cfg.DNDEnd}
 	pendingPath := filepath.Join(cfg.SoulmanRoot, "logs", "dnd-pending.txt")
-	batcherNotifier := notifier
+	batcherNotifier := batchRealNotifier
 	if cfg.DNDEnabled {
-		batcherNotifier = dnd.WrapNotifier(dndWindow, pendingPath, notifier)
-		dndFlusher := dnd.NewFlusher(dndWindow, pendingPath, notifier) // starts its own background loop once Start is called
+		batcherNotifier = dnd.WrapNotifier(dndWindow, pendingPath, batchRealNotifier)
+		dndFlusher := dnd.NewFlusher(dndWindow, pendingPath, batchRealNotifier) // starts its own background loop once Start is called
 		dndFlusher.Start()
 		defer dndFlusher.Stop()
 	}
@@ -119,7 +128,7 @@ func main() {
 	if publisher != nil {
 		schedPublisher = publisher
 	}
-	sched := scheduler.New(cfg.SoulmanRoot, cfg.ReportSendTime, notifier, schedPublisher, gate)
+	sched := scheduler.New(cfg.SoulmanRoot, cfg.ReportSendTime, dailyNotifier, schedPublisher, gate)
 	sched.Start()
 	defer sched.Stop()
 
@@ -128,7 +137,8 @@ func main() {
 	// Deliberately its own plain Discord notifier, NOT feign- or DND-wrapped —
 	// this feature ships live from day one.
 	if cfg.SchoolEnabled {
-		schoolDiscord := notify.NewDiscordNotifier(cfg.DiscordBotToken, cfg.DiscordChannelID)
+		var schoolDiscord notify.Notifier = notify.NewDiscordNotifier(cfg.DiscordBotToken, cfg.DiscordChannelID)
+		schoolDiscord = audit.Wrap(auditLog, schoolDiscord, "school-reminder")
 
 		var inviter scheduler.EventInviter
 		if cfg.CalendarClientID != "" && cfg.CalendarClientSecret != "" && cfg.CalendarRefreshToken != "" {

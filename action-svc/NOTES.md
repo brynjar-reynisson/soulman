@@ -6,6 +6,19 @@ Incidents, gotchas, and decisions learned running this service — not captured 
 
 `natsclient/consumer_test.go` and `natsclient/natsclient_test.go` connected to the real shared dev/prod NATS server by default and published test payloads onto the real `soulman.thinking.request`/`soulman.memory.write` subjects — a malformed test `ActionRequest` triggered a real `"unknown action_hint, dropping"` error in prod, and a fake `OutcomeRecord` became a real episode row in Postgres. Every live-NATS test in this package now requires `SOULMAN_NATS_INTEGRATION_TESTS=1` to run. Full incident writeup and root cause: `perception-svc/NOTES.md`.
 
+## Discord audit log (`audit` package, added 2026-09-03)
+
+Every Discord send goes through `audit.Wrap` before it reaches the real `notify.Notifier` — one JSONL line per attempt to `$SOULMAN_ROOT/logs/discord-audit.jsonl`: `{timestamp, reason, summary, status, error?}`. `summary` is the message's first line, truncated to 150 chars — deliberately a one-liner, not the full message. `status` is `"sent"` or `"failed"` (with `error` populated on failure); a failure to write the audit entry itself never masks the real Send error (it's logged via `slog.Error` and swallowed).
+
+`reason` is bound once per notifier at construction time in `main.go`, not inferred from message content — three values, matching the three semantically distinct origins wired there:
+- `"daily-digest"` — the once-daily report cron
+- `"important-batch"` — gmail-triage/report-important items from `notifybatch.Batcher`, whether sent immediately or delayed by the do-not-disturb window and flushed later by `dnd.Flusher` (both paths share one audit-wrapped notifier constructed before the DND wrap, so a DND-delayed send is still correctly attributed and only audited once, at actual delivery time — not when DND merely queues it)
+- `"school-reminder"` — the school-events scheduler's deliberately un-feign/un-DND-wrapped notifier
+
+In dev (`feign_mode: true`), a `"sent"` entry means feign mode recorded it to `feigned-actions.jsonl` and returned success — same transparent-success semantics feign mode already has everywhere else; the audit log doesn't distinguish a feigned send from a real one.
+
+**This is the log to check first when investigating "why did I get that Discord message" or "did message X actually go out."** No viewer/query tool was built for it (deliberately, v1) — read it directly, same as `feigned-actions.jsonl`.
+
 ## Dispatch handlers
 
 - `append_daily_report_entry` — writes a `report.Entry` to `$SOULMAN_ROOT/reports/`. Entries are filed under the entry's **`OccurredAt` date, not the processing date** — if you're auditing "what happened today," search every report file the event could plausibly belong to, not just today's, or you'll conclude data is missing when it isn't (this happened once: apparent "missing" Discord-reported emails turned out to be filed correctly under their original date).
