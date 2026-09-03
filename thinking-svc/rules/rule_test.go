@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"soulman/common"
+	"soulman/thinking-svc/llm"
 	"soulman/thinking-svc/rules"
 )
 
@@ -17,6 +18,10 @@ type fakeSummarizer struct {
 	classifyImportant bool
 	classifyReason    string
 	classifyErr       error
+
+	extractEvents []llm.SchoolEvent
+	extractNote   string
+	extractErr    error
 }
 
 func (f *fakeSummarizer) Summarize(_ context.Context, _ string) (string, error) {
@@ -25,6 +30,10 @@ func (f *fakeSummarizer) Summarize(_ context.Context, _ string) (string, error) 
 
 func (f *fakeSummarizer) ClassifyImportance(_ context.Context, _, _, _ string) (bool, string, error) {
 	return f.classifyImportant, f.classifyReason, f.classifyErr
+}
+
+func (f *fakeSummarizer) ExtractSchoolEvents(_ context.Context, _, _, _ string, _ time.Time) ([]llm.SchoolEvent, string, error) {
+	return f.extractEvents, f.extractNote, f.extractErr
 }
 
 func newFolderWatcherStimulus(rawText string, occurredAt time.Time) *common.Stimulus {
