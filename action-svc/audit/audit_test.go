@@ -101,7 +101,7 @@ func TestSend_Failure_RecordsFailedEntryWithError_AndPropagatesError(t *testing.
 	}
 }
 
-func TestSend_MultilineMessage_SummaryIsFirstLineOnly(t *testing.T) {
+func TestSend_MultilineMessage_SummaryCollapsesWholeMessage(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "discord-audit.jsonl")
 	log := audit.New(logPath)
 	n := audit.Wrap(log, &fakeNotifier{}, "school-reminder")
@@ -112,8 +112,30 @@ func TestSend_MultilineMessage_SummaryIsFirstLineOnly(t *testing.T) {
 	}
 
 	entries := readEntries(t, logPath)
-	if entries[0]["summary"] != "**Soulman Reminder**" {
-		t.Errorf("summary = %v, want just the first line", entries[0]["summary"])
+	want := "**Soulman Reminder** 📅 Tomorrow (2026-09-04): • Treyjudagurinn (from thuridur.ottarsdottir01@reykjavik.is)"
+	if entries[0]["summary"] != want {
+		t.Errorf("summary = %v, want %q (the whole message collapsed onto one line, not just the first line)", entries[0]["summary"], want)
+	}
+}
+
+func TestSend_BatchHeaderMessage_SummaryIncludesTheActualItem(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "discord-audit.jsonl")
+	log := audit.New(logPath)
+	n := audit.Wrap(log, &fakeNotifier{}, "important-batch")
+
+	// Mirrors notifybatch.formatBatch's real shape: a count header on its
+	// own line, blank line, then the actual item — the exact shape that
+	// motivated this fix (a first-line-only summary recorded only the
+	// header, never what was actually sent).
+	message := "1 important item(s):\n\n[C:\\Users\\Lenovo\\DigitalMe\\errors] unknown-file\nAudit log verification"
+	if err := n.Send(message); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	entries := readEntries(t, logPath)
+	summary, _ := entries[0]["summary"].(string)
+	if !strings.Contains(summary, "Audit log verification") {
+		t.Errorf("summary = %q, want it to include the actual item content, not just the count header", summary)
 	}
 }
 

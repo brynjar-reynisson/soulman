@@ -42,19 +42,20 @@ type Entry struct {
 
 const maxSummaryRunes = 150
 
-// summarize reduces message to a single line: its first line only,
-// trimmed, capped at maxSummaryRunes.
+// summarize reduces message to a single line, capped at maxSummaryRunes.
+// The whole message collapses into it (whitespace/newlines joined with a
+// single space), not just its first line — several real message shapes
+// (notifybatch's "N important item(s):" header, the school scheduler's
+// "**Soulman Reminder**" line) put the actual content on a later line, so
+// a first-line-only summary would record nothing useful about what was
+// actually sent.
 func summarize(message string) string {
-	line := message
-	if idx := strings.IndexByte(line, '\n'); idx >= 0 {
-		line = line[:idx]
-	}
-	line = strings.TrimSpace(line)
-	r := []rune(line)
+	collapsed := strings.Join(strings.Fields(message), " ")
+	r := []rune(collapsed)
 	if len(r) > maxSummaryRunes {
 		return string(r[:maxSummaryRunes]) + "…"
 	}
-	return line
+	return collapsed
 }
 
 // record appends one Entry as a single JSON line. A failure here is logged
