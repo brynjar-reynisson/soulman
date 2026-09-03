@@ -76,6 +76,8 @@ func (d *Dispatcher) Handle(msg []byte) {
 		d.dispatchAppendDailyReportEntry(req)
 	case "triage_gmail_email":
 		d.dispatchGmailTriage(req)
+	case "process_school_event":
+		d.dispatchSchoolEvent(req)
 	default:
 		slog.Error("dispatch: unknown action_hint, dropping", "action_hint", req.ActionHint, "correlation_id", req.CorrelationID)
 	}
