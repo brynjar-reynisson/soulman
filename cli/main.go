@@ -63,6 +63,14 @@ func main() {
 		return
 	}
 
+	if args.Mode == "school-backfill" {
+		if err := runSchoolBackfill(baseURL, args.SchoolBackfillSince, args.SchoolBackfillDryRun); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	id, err := client.Send(baseURL, client.Request{
 		Text:     args.Text,
 		Mode:     args.Mode,

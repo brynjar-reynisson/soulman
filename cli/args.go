@@ -7,12 +7,14 @@ import (
 )
 
 type parsedArgs struct {
-	Text                string
-	Mode                string
-	Priority            string
-	Dev                 bool
-	InjectFile          string
-	DiscordHistoryLimit int
+	Text                 string
+	Mode                 string
+	Priority             string
+	Dev                  bool
+	InjectFile           string
+	DiscordHistoryLimit  int
+	SchoolBackfillSince  string
+	SchoolBackfillDryRun bool
 }
 
 var validPriorities = map[string]bool{"low": true, "normal": true, "high": true, "critical": true}
@@ -58,6 +60,14 @@ func parseArgs(args []string) (parsedArgs, error) {
 				return parsedArgs{}, fmt.Errorf("--limit must be a number, got %q", args[i])
 			}
 			res.DiscordHistoryLimit = n
+		case !endOfFlags && a == "--since":
+			if i+1 >= len(args) {
+				return parsedArgs{}, fmt.Errorf("--since requires a value")
+			}
+			i++
+			res.SchoolBackfillSince = args[i]
+		case !endOfFlags && a == "--dry-run":
+			res.SchoolBackfillDryRun = true
 		case !endOfFlags && strings.HasPrefix(a, "--"):
 			return parsedArgs{}, fmt.Errorf("unrecognized flag: %s", a)
 		default:
@@ -71,6 +81,14 @@ func parseArgs(args []string) (parsedArgs, error) {
 
 	if len(positional) > 0 && positional[0] == "discord-history" {
 		res.Mode = "discord-history"
+		return res, nil
+	}
+
+	if len(positional) > 0 && positional[0] == "school-backfill" {
+		if res.SchoolBackfillSince == "" {
+			return parsedArgs{}, fmt.Errorf("usage: soulman school-backfill --since YYYY-MM-DD [--dry-run]")
+		}
+		res.Mode = "school-backfill"
 		return res, nil
 	}
 
