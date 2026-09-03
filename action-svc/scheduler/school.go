@@ -205,28 +205,42 @@ func filterByCalendarPending(group []schoolevents.Event) []schoolevents.Event {
 
 // buildAggregatedInvite combines every event in group (all sharing the
 // same Date/HasTime/Time, per groupByDateAndTime) into a single Calendar
-// event: descriptions joined into the summary, distinct senders joined
-// into the description.
+// event: descriptions joined into the summary, distinct contacts joined
+// into the description — different events in the same group can carry
+// different contacts (e.g. two teachers' emails), which is exactly the
+// signal for which child each part of the invite applies to.
 func (s *SchoolEventScheduler) buildAggregatedInvite(group []schoolevents.Event) calendar.Invite {
 	first := group[0]
 	summaries := make([]string, len(group))
-	var senders []string
-	seenSender := map[string]bool{}
+	var contacts []string
+	seenContact := map[string]bool{}
 	for i, e := range group {
 		summaries[i] = e.Description
-		if !seenSender[e.Sender] {
-			seenSender[e.Sender] = true
-			senders = append(senders, e.Sender)
+		contact := contactOrSender(e)
+		if !seenContact[contact] {
+			seenContact[contact] = true
+			contacts = append(contacts, contact)
 		}
 	}
 	return calendar.Invite{
 		Summary:     strings.Join(summaries, "; "),
-		Description: "from " + strings.Join(senders, ", "),
+		Description: "from " + strings.Join(contacts, ", "),
 		Date:        first.Date,
 		HasTime:     first.HasTime,
 		Time:        first.Time,
 		Attendees:   s.recipients,
 	}
+}
+
+// contactOrSender prefers an event's extracted ContactEmail (a specific
+// teacher's real address) over its Sender (often a generic no-reply
+// system address) — the contact is the much stronger "which child is
+// this about" signal when grades aren't specified.
+func contactOrSender(e schoolevents.Event) string {
+	if e.ContactEmail != "" {
+		return e.ContactEmail
+	}
+	return e.Sender
 }
 
 func (s *SchoolEventScheduler) sendDiscordWithRetry(message string) error {
@@ -269,7 +283,7 @@ func formatSchoolMessage(group []schoolevents.Event, now time.Time) string {
 		b.WriteString("• ")
 		b.WriteString(e.Description)
 		b.WriteString(" (from ")
-		b.WriteString(e.Sender)
+		b.WriteString(contactOrSender(e))
 		b.WriteString(")\n")
 	}
 	return strings.TrimRight(b.String(), "\n")

@@ -256,6 +256,43 @@ func TestRunOnce_AggregatedGroup_PartialCalendarFailure_OnlyFailedOnesStayPendin
 	}
 }
 
+func TestRunOnce_ContactEmail_PreferredOverSenderInMessageAndInvite(t *testing.T) {
+	root := t.TempDir()
+	now := time.Date(2026, 9, 3, 16, 0, 0, 0, time.Local)
+	id := schoolevents.ID("t1", 0, "2026-09-04")
+	schoolevents.Save(root, schoolevents.Event{ID: id, Date: "2026-09-04", Description: "Sweater day", Sender: "noreply@mentor.is", ContactEmail: "alma@reykjavik.is", DiscordStatus: "pending", CalendarStatus: "pending", CreatedAt: now})
+
+	discord := &fakeDiscordNotifier{}
+	inviter := &fakeInviter{}
+	s := scheduler.NewSchoolEventScheduler(root, "16:00", []string{"her@example.com"}, discord, inviter)
+	s.Now = func() time.Time { return now }
+	s.RunOnce()
+
+	if len(discord.sent()) != 1 || !strings.Contains(discord.sent()[0], "alma@reykjavik.is") || strings.Contains(discord.sent()[0], "noreply@mentor.is") {
+		t.Errorf("discord message = %v, want it to show alma@reykjavik.is, not noreply@mentor.is", discord.sent())
+	}
+	if len(inviter.created()) != 1 || !strings.Contains(inviter.created()[0].Description, "alma@reykjavik.is") {
+		t.Errorf("invite = %+v, want Description to include alma@reykjavik.is", inviter.created())
+	}
+}
+
+func TestRunOnce_NoContactEmail_FallsBackToSender(t *testing.T) {
+	root := t.TempDir()
+	now := time.Date(2026, 9, 3, 16, 0, 0, 0, time.Local)
+	id := schoolevents.ID("t1", 0, "2026-09-04")
+	schoolevents.Save(root, schoolevents.Event{ID: id, Date: "2026-09-04", Description: "Sweater day", Sender: "noreply@mentor.is", DiscordStatus: "pending", CalendarStatus: "pending", CreatedAt: now})
+
+	discord := &fakeDiscordNotifier{}
+	inviter := &fakeInviter{}
+	s := scheduler.NewSchoolEventScheduler(root, "16:00", []string{"her@example.com"}, discord, inviter)
+	s.Now = func() time.Time { return now }
+	s.RunOnce()
+
+	if len(discord.sent()) != 1 || !strings.Contains(discord.sent()[0], "noreply@mentor.is") {
+		t.Errorf("discord message = %v, want it to fall back to noreply@mentor.is when ContactEmail is empty", discord.sent())
+	}
+}
+
 func TestStart_CatchUp_FiresImmediatelyWithoutWaitingForTick(t *testing.T) {
 	root := t.TempDir()
 	now := time.Date(2026, 9, 3, 8, 0, 0, 0, time.Local) // well before 16:00

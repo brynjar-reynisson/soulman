@@ -209,6 +209,22 @@ func TestDeepSeekClient_ExtractSchoolEvents_Success(t *testing.T) {
 	}
 }
 
+func TestDeepSeekClient_ExtractSchoolEvents_ContactEmailMapped(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"choices":[{"message":{"content":"{\"events\":[{\"date\":\"2026-09-04\",\"has_time\":false,\"time\":\"\",\"description\":\"Treyjudagur\",\"contact_email\":\"alma@reykjavik.is\"}]}"}}]}`))
+	}))
+	defer srv.Close()
+
+	client := llm.NewDeepSeekClient("test-key", srv.URL, "deepseek-chat", 5*time.Second)
+	events, _, err := client.ExtractSchoolEvents(context.Background(), "noreply@mentor.is", "s", "b", time.Now(), nil)
+	if err != nil {
+		t.Fatalf("ExtractSchoolEvents: %v", err)
+	}
+	if len(events) != 1 || events[0].ContactEmail != "alma@reykjavik.is" {
+		t.Errorf("events = %+v, want ContactEmail = alma@reykjavik.is", events)
+	}
+}
+
 func TestDeepSeekClient_ExtractSchoolEvents_EmptyArray_NoEvents(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"choices":[{"message":{"content":"{\"events\":[]}"}}]}`))

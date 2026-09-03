@@ -29,6 +29,35 @@ func schoolEventParamsJSON(t *testing.T, sender, subject string, occurredAt stri
 	return b
 }
 
+func TestDispatch_SchoolEvent_ContactEmail_PersistedToStore(t *testing.T) {
+	root := t.TempDir()
+	pub := &fakePublisher{}
+	d := dispatch.New(root, pub, nil, nil)
+
+	future := time.Now().AddDate(0, 0, 3).Format("2006-01-02")
+	req := common.ActionRequest{
+		CorrelationID: "s5",
+		ActionHint:    "process_school_event",
+		Parameters: schoolEventParamsJSON(t, "noreply@mentor.is", "Reminder", time.Now().Format(time.RFC3339),
+			[]map[string]interface{}{{"date": future, "has_time": false, "time": "", "description": "Sweater day", "contact_email": "alma@reykjavik.is"}}),
+	}
+	b, _ := json.Marshal(req)
+	d.Handle(b)
+
+	id := schoolevents.ID("thread-9", 0, future)
+	data, err := os.ReadFile(filepath.Join(root, "logs", "school-events", id+".json"))
+	if err != nil {
+		t.Fatalf("read queued event file: %v", err)
+	}
+	var e schoolevents.Event
+	if err := json.Unmarshal(data, &e); err != nil {
+		t.Fatalf("unmarshal event: %v", err)
+	}
+	if e.ContactEmail != "alma@reykjavik.is" {
+		t.Errorf("ContactEmail = %q, want alma@reykjavik.is", e.ContactEmail)
+	}
+}
+
 func TestDispatch_SchoolEvent_FutureDate_QueuesEvent(t *testing.T) {
 	root := t.TempDir()
 	pub := &fakePublisher{}

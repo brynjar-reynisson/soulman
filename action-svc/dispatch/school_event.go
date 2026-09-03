@@ -14,10 +14,11 @@ import (
 // SchoolEventParam mirrors thinking-svc's schoolEventParam — the shape one
 // extracted event takes inside process_school_event's Parameters.
 type SchoolEventParam struct {
-	Date        string `json:"date"`
-	HasTime     bool   `json:"has_time"`
-	Time        string `json:"time"`
-	Description string `json:"description"`
+	Date         string `json:"date"`
+	HasTime      bool   `json:"has_time"`
+	Time         string `json:"time"`
+	Description  string `json:"description"`
+	ContactEmail string `json:"contact_email"`
 }
 
 // SchoolEmailParams mirrors thinking-svc's schoolEmailParams — the
@@ -78,7 +79,7 @@ func (d *Dispatcher) dispatchSchoolEvent(req common.ActionRequest) {
 		id := schoolevents.ID(p.ThreadID, i, ev.Date)
 		saveErr := schoolevents.Save(d.root, schoolevents.Event{
 			ID: id, Date: ev.Date, HasTime: ev.HasTime, Time: ev.Time, Description: ev.Description,
-			Sender: p.Sender, Subject: p.Subject,
+			Sender: p.Sender, Subject: p.Subject, ContactEmail: ev.ContactEmail,
 			DiscordStatus: "pending", CalendarStatus: "pending", CreatedAt: now,
 		})
 		if saveErr != nil {

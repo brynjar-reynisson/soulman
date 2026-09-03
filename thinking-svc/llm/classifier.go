@@ -26,6 +26,12 @@ type SchoolEvent struct {
 	HasTime     bool
 	Time        string // "HH:MM", only meaningful when HasTime
 	Description string
+	// ContactEmail is a specific person's contact/reply email mentioned in
+	// the email body (e.g. a teacher's real address), when one is present
+	// — the visible sender is often a generic no-reply system address
+	// that carries no information about which teacher/class/child an
+	// event applies to. Empty when the body mentions no such address.
+	ContactEmail string
 }
 
 // SchoolEventExtractor pulls zero or more actionable dates/times out of a
@@ -95,4 +101,6 @@ Only include events relevant to these grades: %s. A whole-school or ungraded ann
 
 const schoolEventExtractorSystemPromptSuffix = `
 
-Respond with strict JSON only, no markdown, exactly this shape: {"events": [{"date": "YYYY-MM-DD", "has_time": true or false, "time": "HH:MM" or "", "description": "<short phrase>"}]}`
+If the body mentions a specific person's contact/reply email address (e.g. a teacher's real address), separate from the visible sender, include it as "contact_email". The visible sender is often a generic no-reply system address that carries no information about which teacher, class, or child an event applies to — the contact email, when present, is a much stronger signal. If no such address is mentioned, use an empty string.
+
+Respond with strict JSON only, no markdown, exactly this shape: {"events": [{"date": "YYYY-MM-DD", "has_time": true or false, "time": "HH:MM" or "", "description": "<short phrase>", "contact_email": "<email or empty>"}]}`

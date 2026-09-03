@@ -185,10 +185,11 @@ type extractEventsResponse struct {
 }
 
 type schoolEventJSON struct {
-	Date        string `json:"date"`
-	HasTime     bool   `json:"has_time"`
-	Time        string `json:"time"`
-	Description string `json:"description"`
+	Date         string `json:"date"`
+	HasTime      bool   `json:"has_time"`
+	Time         string `json:"time"`
+	Description  string `json:"description"`
+	ContactEmail string `json:"contact_email"`
 }
 
 // ExtractSchoolEvents sends a single non-streaming Chat Completions request
@@ -262,7 +263,7 @@ func (c *DeepSeekClient) ExtractSchoolEvents(ctx context.Context, sender, subjec
 
 	events := make([]SchoolEvent, len(result.Events))
 	for i, e := range result.Events {
-		events[i] = SchoolEvent{Date: e.Date, HasTime: e.HasTime, Time: e.Time, Description: e.Description}
+		events[i] = SchoolEvent{Date: e.Date, HasTime: e.HasTime, Time: e.Time, Description: e.Description, ContactEmail: e.ContactEmail}
 	}
 	return events, "", nil
 }

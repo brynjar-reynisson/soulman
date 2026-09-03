@@ -33,6 +33,11 @@ type Event struct {
 	Description    string    `json:"description"`
 	Sender         string    `json:"sender"`
 	Subject        string    `json:"subject"`
+	// ContactEmail is a specific person's contact/reply email mentioned in
+	// the source email's body, when one was extracted — a much stronger
+	// "which teacher/child is this about" signal than Sender, which is
+	// often a generic no-reply system address. Empty when none was found.
+	ContactEmail string `json:"contact_email"`
 	DiscordStatus  string    `json:"discord_status"`
 	CalendarStatus string    `json:"calendar_status"`
 	CreatedAt      time.Time `json:"created_at"`

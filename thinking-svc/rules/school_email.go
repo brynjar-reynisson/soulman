@@ -17,10 +17,11 @@ import (
 // a separate type (not shared across modules) per this repo's "small
 // independent duplication over cross-module imports" precedent.
 type schoolEventParam struct {
-	Date        string `json:"date"`
-	HasTime     bool   `json:"has_time"`
-	Time        string `json:"time"`
-	Description string `json:"description"`
+	Date         string `json:"date"`
+	HasTime      bool   `json:"has_time"`
+	Time         string `json:"time"`
+	Description  string `json:"description"`
+	ContactEmail string `json:"contact_email"`
 }
 
 type schoolEmailParams struct {
@@ -87,7 +88,7 @@ func handleSchoolEmail(ctx context.Context, s *common.Stimulus, client llm.Clien
 
 	eventParams := make([]schoolEventParam, len(events))
 	for i, e := range events {
-		eventParams[i] = schoolEventParam{Date: e.Date, HasTime: e.HasTime, Time: e.Time, Description: e.Description}
+		eventParams[i] = schoolEventParam{Date: e.Date, HasTime: e.HasTime, Time: e.Time, Description: e.Description, ContactEmail: e.ContactEmail}
 	}
 
 	params, err := json.Marshal(schoolEmailParams{

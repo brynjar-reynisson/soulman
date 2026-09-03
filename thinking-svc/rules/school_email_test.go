@@ -99,6 +99,30 @@ func TestSchoolEmailRule_Handle_EventsFound_HighUrgency(t *testing.T) {
 	}
 }
 
+func TestSchoolEmailRule_Handle_ContactEmailIncludedInParams(t *testing.T) {
+	rule := rules.NewSchoolEmailRule([]string{"@reykjavik.is"}, nil)
+	occurredAt := time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC)
+	s := newSchoolStimulus("noreply@mentor.is", "Reminder", "Tomorrow is sweater day!", occurredAt)
+
+	client := &fakeSummarizer{extractEvents: []llm.SchoolEvent{{Date: "2026-09-04", Description: "Sweater day", ContactEmail: "alma@reykjavik.is"}}}
+	req, err := rule.Handle(context.Background(), s, client)
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	var params struct {
+		Events []struct {
+			ContactEmail string `json:"contact_email"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(req.Parameters, &params); err != nil {
+		t.Fatalf("unmarshal params: %v", err)
+	}
+	if len(params.Events) != 1 || params.Events[0].ContactEmail != "alma@reykjavik.is" {
+		t.Errorf("params.Events = %+v, want ContactEmail = alma@reykjavik.is", params.Events)
+	}
+}
+
 func TestSchoolEmailRule_Handle_ThreadsRelevantGradesToExtractor(t *testing.T) {
 	rule := rules.NewSchoolEmailRule([]string{"@reykjavik.is"}, []string{"5", "8"})
 	s := newSchoolStimulus("teacher@reykjavik.is", "Reminder", "sweater day", time.Now())
