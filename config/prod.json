@@ -58,8 +58,8 @@
   "school": {
     "enabled": true,
     "sender_domains": ["@reykjavik.is", "@mentor.is"],
-    "notify_time": "19:08",
-    "calendar_recipient_emails": [],
+    "notify_time": "16:00",
+    "calendar_recipient_emails": ["joninasveins@gmail.com"],
     "relevant_grades": ["5", "8"]
   }
 }
