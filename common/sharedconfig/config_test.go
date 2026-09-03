@@ -360,7 +360,8 @@ func TestLoad_SchoolFields(t *testing.T) {
 			"enabled": true,
 			"sender_domains": ["@reykjavik.is"],
 			"notify_time": "16:00",
-			"calendar_recipient_emails": ["joninasveins@gmail.com"]
+			"calendar_recipient_emails": ["joninasveins@gmail.com"],
+			"relevant_grades": ["5", "8"]
 		}
 	}`
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
@@ -384,6 +385,9 @@ func TestLoad_SchoolFields(t *testing.T) {
 	if len(cfg.School.CalendarRecipientEmails) != 1 || cfg.School.CalendarRecipientEmails[0] != "joninasveins@gmail.com" {
 		t.Errorf("School.CalendarRecipientEmails = %v, want [joninasveins@gmail.com]", cfg.School.CalendarRecipientEmails)
 	}
+	if len(cfg.School.RelevantGrades) != 2 || cfg.School.RelevantGrades[0] != "5" || cfg.School.RelevantGrades[1] != "8" {
+		t.Errorf("School.RelevantGrades = %v, want [5 8]", cfg.School.RelevantGrades)
+	}
 }
 
 func TestLoad_MissingSchoolField_ZeroValue(t *testing.T) {
@@ -402,5 +406,8 @@ func TestLoad_MissingSchoolField_ZeroValue(t *testing.T) {
 	}
 	if len(cfg.School.SenderDomains) != 0 {
 		t.Errorf("School.SenderDomains = %v, want empty when school block absent from JSON", cfg.School.SenderDomains)
+	}
+	if len(cfg.School.RelevantGrades) != 0 {
+		t.Errorf("School.RelevantGrades = %v, want empty when school block absent from JSON", cfg.School.RelevantGrades)
 	}
 }

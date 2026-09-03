@@ -131,6 +131,12 @@ type SchoolConfig struct {
 	SenderDomains           []string `json:"sender_domains"`
 	NotifyTime              string   `json:"notify_time"`
 	CalendarRecipientEmails []string `json:"calendar_recipient_emails"`
+	// RelevantGrades filters extracted events to only those relevant to
+	// these grades (e.g. ["5", "8"]) — a whole-school/ungraded
+	// announcement still counts, but an event specific to a different
+	// grade does not. Threaded into the extraction prompt
+	// (thinking-svc/llm). Empty means no filtering (every grade counts).
+	RelevantGrades []string `json:"relevant_grades"`
 }
 
 // ClaudeProjectRoot is one curated project-folder root the Claude

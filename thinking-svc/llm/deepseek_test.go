@@ -194,7 +194,7 @@ func TestDeepSeekClient_ExtractSchoolEvents_Success(t *testing.T) {
 
 	client := llm.NewDeepSeekClient("test-key", srv.URL, "deepseek-chat", 5*time.Second)
 	ref := time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC)
-	events, note, err := client.ExtractSchoolEvents(context.Background(), "teacher@reykjavik.is", "Reminder", "Don't forget tomorrow is sweater day!", ref)
+	events, note, err := client.ExtractSchoolEvents(context.Background(), "teacher@reykjavik.is", "Reminder", "Don't forget tomorrow is sweater day!", ref, nil)
 	if err != nil {
 		t.Fatalf("ExtractSchoolEvents: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestDeepSeekClient_ExtractSchoolEvents_EmptyArray_NoEvents(t *testing.T) {
 	defer srv.Close()
 
 	client := llm.NewDeepSeekClient("test-key", srv.URL, "deepseek-chat", 5*time.Second)
-	events, _, err := client.ExtractSchoolEvents(context.Background(), "info@reykjavik.is", "Notice", "Unrelated municipal notice.", time.Now())
+	events, _, err := client.ExtractSchoolEvents(context.Background(), "info@reykjavik.is", "Notice", "Unrelated municipal notice.", time.Now(), nil)
 	if err != nil {
 		t.Fatalf("ExtractSchoolEvents: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestDeepSeekClient_ExtractSchoolEvents_NonOKStatus_FailsClosed(t *testing.T
 	defer srv.Close()
 
 	client := llm.NewDeepSeekClient("test-key", srv.URL, "deepseek-chat", 5*time.Second)
-	events, note, err := client.ExtractSchoolEvents(context.Background(), "a@reykjavik.is", "s", "b", time.Now())
+	events, note, err := client.ExtractSchoolEvents(context.Background(), "a@reykjavik.is", "s", "b", time.Now(), nil)
 	if err != nil {
 		t.Fatalf("ExtractSchoolEvents must never return an error, got: %v", err)
 	}
@@ -255,7 +255,7 @@ func TestDeepSeekClient_ExtractSchoolEvents_ReferenceDateInPrompt(t *testing.T) 
 
 	client := llm.NewDeepSeekClient("test-key", srv.URL, "deepseek-chat", 5*time.Second)
 	ref := time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC)
-	client.ExtractSchoolEvents(context.Background(), "a@reykjavik.is", "s", "b", ref)
+	client.ExtractSchoolEvents(context.Background(), "a@reykjavik.is", "s", "b", ref, nil)
 
 	messages, _ := capturedBody["messages"].([]interface{})
 	if len(messages) == 0 {
@@ -265,5 +265,43 @@ func TestDeepSeekClient_ExtractSchoolEvents_ReferenceDateInPrompt(t *testing.T) 
 	content, _ := system["content"].(string)
 	if !strings.Contains(content, "2026-08-05") {
 		t.Errorf("system prompt = %q, want it to contain the reference date 2026-08-05", content)
+	}
+}
+
+func TestDeepSeekClient_ExtractSchoolEvents_RelevantGradesInPrompt(t *testing.T) {
+	var capturedBody map[string]interface{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&capturedBody)
+		w.Write([]byte(`{"choices":[{"message":{"content":"{\"events\":[]}"}}]}`))
+	}))
+	defer srv.Close()
+
+	client := llm.NewDeepSeekClient("test-key", srv.URL, "deepseek-chat", 5*time.Second)
+	client.ExtractSchoolEvents(context.Background(), "a@reykjavik.is", "s", "b", time.Now(), []string{"5", "8"})
+
+	messages, _ := capturedBody["messages"].([]interface{})
+	system, _ := messages[0].(map[string]interface{})
+	content, _ := system["content"].(string)
+	if !strings.Contains(content, "5, 8") {
+		t.Errorf("system prompt = %q, want it to contain the relevant grades \"5, 8\"", content)
+	}
+}
+
+func TestDeepSeekClient_ExtractSchoolEvents_NoGrades_OmitsGradeClause(t *testing.T) {
+	var capturedBody map[string]interface{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&capturedBody)
+		w.Write([]byte(`{"choices":[{"message":{"content":"{\"events\":[]}"}}]}`))
+	}))
+	defer srv.Close()
+
+	client := llm.NewDeepSeekClient("test-key", srv.URL, "deepseek-chat", 5*time.Second)
+	client.ExtractSchoolEvents(context.Background(), "a@reykjavik.is", "s", "b", time.Now(), nil)
+
+	messages, _ := capturedBody["messages"].([]interface{})
+	system, _ := messages[0].(map[string]interface{})
+	content, _ := system["content"].(string)
+	if strings.Contains(content, "Only include events relevant to these grades") {
+		t.Errorf("system prompt = %q, want no grade-filtering clause when relevantGrades is empty", content)
 	}
 }

@@ -103,9 +103,17 @@ func (s *SchoolEventScheduler) nextRun(from time.Time) time.Time {
 	return next
 }
 
-// RunOnce sends the due-or-overdue reminders for each still-pending
-// channel. Each event's Discord and Calendar attempts are independent: a
-// failure in one never blocks or re-triggers the other.
+// RunOnce sends the due-or-overdue reminders, grouping same-date events
+// that carry no specific time (or the same specific time) into one
+// aggregated Discord message and one aggregated Calendar invite — school
+// mail routinely produces two separate emails about the same occasion
+// (e.g. two announcements about the same jersey day), and a parent wants
+// one notification for that day, not two. Events on the same date but at
+// genuinely different specific times stay separate, since those are
+// different occasions. Each event's Discord and Calendar resolution is
+// still tracked independently per-event (schoolevents.Event), so a
+// partial send — some events in a group already resolved, others not —
+// only re-sends the still-pending ones on the next run.
 func (s *SchoolEventScheduler) RunOnce() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -115,40 +123,109 @@ func (s *SchoolEventScheduler) RunOnce() {
 		slog.Error("scheduler: school events lookup failed", "error", err)
 		return
 	}
-	for _, e := range due {
-		s.notifyOne(e)
+	for _, group := range groupByDateAndTime(due) {
+		s.notifyGroup(group)
 	}
 }
 
-func (s *SchoolEventScheduler) notifyOne(e schoolevents.Event) {
-	if e.DiscordStatus == "pending" {
-		if err := s.sendDiscordWithRetry(formatSchoolMessage(e)); err != nil {
-			slog.Error("scheduler: school event discord send failed, will retry", "id", e.ID, "error", err)
-		} else if markErr := schoolevents.MarkDiscordSent(s.root, e.ID); markErr != nil {
-			slog.Error("scheduler: mark discord sent failed", "id", e.ID, "error", markErr)
+// groupByDateAndTime groups events sharing the same Date and Time
+// (date-only events all carry Time == "", so they group together
+// regardless of description). Order of first appearance is preserved so
+// output is deterministic given DueOrOverdue's own (directory-listing)
+// order.
+func groupByDateAndTime(events []schoolevents.Event) [][]schoolevents.Event {
+	var order []string
+	groups := map[string][]schoolevents.Event{}
+	for _, e := range events {
+		key := e.Date + "|" + e.Time
+		if _, ok := groups[key]; !ok {
+			order = append(order, key)
+		}
+		groups[key] = append(groups[key], e)
+	}
+	result := make([][]schoolevents.Event, 0, len(order))
+	for _, key := range order {
+		result = append(result, groups[key])
+	}
+	return result
+}
+
+func (s *SchoolEventScheduler) notifyGroup(group []schoolevents.Event) {
+	pendingDiscord := filterByDiscordPending(group)
+	if len(pendingDiscord) > 0 {
+		if err := s.sendDiscordWithRetry(formatSchoolMessage(pendingDiscord, s.Now())); err != nil {
+			slog.Error("scheduler: school event discord send failed, will retry", "date", group[0].Date, "error", err)
+		} else {
+			for _, e := range pendingDiscord {
+				if markErr := schoolevents.MarkDiscordSent(s.root, e.ID); markErr != nil {
+					slog.Error("scheduler: mark discord sent failed", "id", e.ID, "error", markErr)
+				}
+			}
 		}
 	}
 
-	if e.CalendarStatus != "pending" {
+	pendingCalendar := filterByCalendarPending(group)
+	if len(pendingCalendar) == 0 {
 		return
 	}
 	if len(s.recipients) == 0 || s.inviter == nil {
 		return // stays pending — a recipient/credentials added later still catches this up
 	}
-	inv := calendar.Invite{
-		Summary:     e.Description,
-		Description: "from " + e.Sender,
-		Date:        e.Date,
-		HasTime:     e.HasTime,
-		Time:        e.Time,
-		Attendees:   s.recipients,
-	}
+	inv := s.buildAggregatedInvite(pendingCalendar)
 	if err := s.inviter.CreateInvite(context.Background(), inv); err != nil {
-		slog.Error("scheduler: school event calendar invite failed, will retry", "id", e.ID, "error", err)
+		slog.Error("scheduler: school event calendar invite failed, will retry", "date", group[0].Date, "error", err)
 		return
 	}
-	if err := schoolevents.MarkCalendarStatus(s.root, e.ID, "sent"); err != nil {
-		slog.Error("scheduler: mark calendar sent failed", "id", e.ID, "error", err)
+	for _, e := range pendingCalendar {
+		if err := schoolevents.MarkCalendarStatus(s.root, e.ID, "sent"); err != nil {
+			slog.Error("scheduler: mark calendar sent failed", "id", e.ID, "error", err)
+		}
+	}
+}
+
+func filterByDiscordPending(group []schoolevents.Event) []schoolevents.Event {
+	var out []schoolevents.Event
+	for _, e := range group {
+		if e.DiscordStatus == "pending" {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func filterByCalendarPending(group []schoolevents.Event) []schoolevents.Event {
+	var out []schoolevents.Event
+	for _, e := range group {
+		if e.CalendarStatus == "pending" {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// buildAggregatedInvite combines every event in group (all sharing the
+// same Date/HasTime/Time, per groupByDateAndTime) into a single Calendar
+// event: descriptions joined into the summary, distinct senders joined
+// into the description.
+func (s *SchoolEventScheduler) buildAggregatedInvite(group []schoolevents.Event) calendar.Invite {
+	first := group[0]
+	summaries := make([]string, len(group))
+	var senders []string
+	seenSender := map[string]bool{}
+	for i, e := range group {
+		summaries[i] = e.Description
+		if !seenSender[e.Sender] {
+			seenSender[e.Sender] = true
+			senders = append(senders, e.Sender)
+		}
+	}
+	return calendar.Invite{
+		Summary:     strings.Join(summaries, "; "),
+		Description: "from " + strings.Join(senders, ", "),
+		Date:        first.Date,
+		HasTime:     first.HasTime,
+		Time:        first.Time,
+		Attendees:   s.recipients,
 	}
 }
 
@@ -169,12 +246,58 @@ func (s *SchoolEventScheduler) sendDiscordWithRetry(message string) error {
 	return err
 }
 
-func formatSchoolMessage(e schoolevents.Event) string {
-	when := e.Date
-	if e.HasTime {
-		when += " " + e.Time
+// formatSchoolMessage builds one Discord message for a group of events
+// sharing the same date/time (see groupByDateAndTime) — a single-event
+// group renders as a one-item list. Labeled "Soulman Reminder" to
+// visually separate it, in the shared Discord channel, from the regular
+// daily-report/gmail-triage messages. The date label reflects the actual
+// relation to now (Today/Tomorrow/a literal date) rather than always
+// saying "Tomorrow" — the startup catch-up run can surface an
+// already-due or same-day event, not just a strictly-tomorrow one.
+func formatSchoolMessage(group []schoolevents.Event, now time.Time) string {
+	first := group[0]
+	when := relativeDayLabel(first.Date, now)
+	if first.HasTime {
+		when += " " + first.Time
 	}
-	return "📅 Tomorrow: " + e.Description + " (" + when + ", from " + e.Sender + ")"
+
+	var b strings.Builder
+	b.WriteString("**Soulman Reminder**\n📅 ")
+	b.WriteString(when)
+	b.WriteString(":\n")
+	for _, e := range group {
+		b.WriteString("• ")
+		b.WriteString(e.Description)
+		b.WriteString(" (from ")
+		b.WriteString(e.Sender)
+		b.WriteString(")\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// relativeDayLabel returns "Today (<date>)"/"Tomorrow (<date>)" when date
+// is today or tomorrow relative to now, else the literal date. Falls back
+// to the literal string on a parse failure rather than erroring — this is
+// display-only, never load-bearing for the due/overdue decision itself
+// (that's DueOrOverdue's job).
+func relativeDayLabel(date string, now time.Time) string {
+	parsed, err := time.ParseInLocation("2006-01-02", date, now.Location())
+	if err != nil {
+		return date
+	}
+	today := startOfDay(now)
+	switch {
+	case parsed.Equal(today):
+		return "Today (" + date + ")"
+	case parsed.Equal(today.AddDate(0, 0, 1)):
+		return "Tomorrow (" + date + ")"
+	default:
+		return date
+	}
+}
+
+func startOfDay(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 }
 
 func parseSchoolSendTime(s string) (int, int) {

@@ -41,7 +41,9 @@ const schoolExtractTruncateLen = 4000
 // (not a package var like GmailTriageRule) because the domain allowlist is
 // config-driven — see
 // docs/superpowers/specs/2026-09-03-school-email-events-design.md.
-func NewSchoolEmailRule(senderDomains []string) Rule {
+// relevantGrades is threaded straight through to the extractor to filter
+// events to the given grades (empty means no filtering).
+func NewSchoolEmailRule(senderDomains []string, relevantGrades []string) Rule {
 	domains := make([]string, len(senderDomains))
 	for i, d := range senderDomains {
 		domains[i] = strings.ToLower(d)
@@ -60,11 +62,13 @@ func NewSchoolEmailRule(senderDomains []string) Rule {
 			}
 			return false
 		},
-		Handle: handleSchoolEmail,
+		Handle: func(ctx context.Context, s *common.Stimulus, client llm.Client) (*common.ActionRequest, error) {
+			return handleSchoolEmail(ctx, s, client, relevantGrades)
+		},
 	}
 }
 
-func handleSchoolEmail(ctx context.Context, s *common.Stimulus, client llm.Client) (*common.ActionRequest, error) {
+func handleSchoolEmail(ctx context.Context, s *common.Stimulus, client llm.Client, relevantGrades []string) (*common.ActionRequest, error) {
 	sender := s.Source.Identity
 	subject := gmailSubject(s)
 	body := s.Content.RawText
@@ -75,7 +79,7 @@ func handleSchoolEmail(ctx context.Context, s *common.Stimulus, client llm.Clien
 		referenceDate = *s.OccurredAt
 	}
 
-	events, note, err := client.ExtractSchoolEvents(ctx, sender, subject, truncate(body, schoolExtractTruncateLen), referenceDate)
+	events, note, err := client.ExtractSchoolEvents(ctx, sender, subject, truncate(body, schoolExtractTruncateLen), referenceDate, relevantGrades)
 	if err != nil {
 		events = nil
 		note = fmt.Sprintf("extraction unavailable: %v", err)

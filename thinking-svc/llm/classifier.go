@@ -33,8 +33,12 @@ type SchoolEvent struct {
 // *DeepSeekClient never returns a non-nil error — any failure collapses to
 // (nil events, a "extraction unavailable: ..." note, nil error) so an LLM
 // hiccup never blocks the report entry the caller always writes.
+// relevantGrades, when non-empty, filters extracted events to those
+// relevant to the given grades (e.g. []string{"5", "8"}) — a
+// whole-school/ungraded announcement still counts, but an event specific
+// to a different grade does not. Empty means no filtering.
 type SchoolEventExtractor interface {
-	ExtractSchoolEvents(ctx context.Context, sender, subject, body string, referenceDate time.Time) (events []SchoolEvent, note string, err error)
+	ExtractSchoolEvents(ctx context.Context, sender, subject, body string, referenceDate time.Time, relevantGrades []string) (events []SchoolEvent, note string, err error)
 }
 
 // Client composes both LLM capabilities thinking-svc's rules currently
@@ -66,15 +70,29 @@ Reserve important for: genuine deadline-driven or financial/legal matters, a rea
 
 Respond with strict JSON only, no markdown and no extra text, in exactly this shape: {"important": true or false, "reason": "<one-sentence reason, under 140 characters>"}.`
 
-// schoolEventExtractorSystemPrompt is a plain string constant, same
-// tuning posture as classifierSystemPrompt. %s is filled with the
-// reference date ("2006-01-02") the caller supplies — see SchoolEvent's
-// doc comment for why that's the email's own received date, not real
-// "now".
-const schoolEventExtractorSystemPrompt = `You extract actionable school dates/times from an email sent by a school or municipal school system. The reference date for resolving relative phrases ("this Friday," "next Tuesday," "tomorrow") is %s — resolve against that date, not any other notion of "today."
+// schoolEventExtractorSystemPromptBase is the always-present portion of
+// the extraction prompt, same tuning posture as classifierSystemPrompt.
+// %s is filled with the reference date ("2006-01-02") the caller
+// supplies — see SchoolEvent's doc comment for why that's the email's own
+// received date, not real "now". buildSchoolExtractorPrompt (deepseek.go)
+// assembles the full prompt, optionally inserting
+// schoolEventExtractorSystemPromptGradeClause before the JSON-shape
+// instruction.
+const schoolEventExtractorSystemPromptBase = `You extract actionable school dates/times from an email sent by a school or municipal school system. The reference date for resolving relative phrases ("this Friday," "next Tuesday," "tomorrow") is %s — resolve against that date, not any other notion of "today."
 
 Only include events where a child or parent needs to DO something or BE somewhere on a specific date: a special clothing/theme day, a packed-lunch day, a field trip, a meeting, an event with a start time. Do not include general announcements with no specific date, or purely informational content.
 
-If the email is not actually about a school date (e.g. an unrelated municipal notice) or contains no such actionable date, return an empty array.
+The "description" field must be a short, verbatim excerpt from the email in its ORIGINAL language — quote the relevant sentence(s) directly, do not translate or paraphrase into English.
+
+If the email is not actually about a school date (e.g. an unrelated municipal notice) or contains no such actionable date, return an empty array.`
+
+// schoolEventExtractorSystemPromptGradeClause is appended only when the
+// caller supplies a non-empty relevantGrades list. %s is filled with the
+// grades joined by ", " (e.g. "5, 8").
+const schoolEventExtractorSystemPromptGradeClause = `
+
+Only include events relevant to these grades: %s. A whole-school or ungraded announcement still counts as relevant. An event specifically about a different grade or class does not.`
+
+const schoolEventExtractorSystemPromptSuffix = `
 
 Respond with strict JSON only, no markdown, exactly this shape: {"events": [{"date": "YYYY-MM-DD", "has_time": true or false, "time": "HH:MM" or "", "description": "<short phrase>"}]}`

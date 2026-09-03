@@ -223,7 +223,8 @@ func TestLoad_SchoolFields(t *testing.T) {
 		"consumer_names": {"thinking_svc": "thinking-svc"},
 		"school": {
 			"enabled": true,
-			"sender_domains": ["@reykjavik.is"]
+			"sender_domains": ["@reykjavik.is"],
+			"relevant_grades": ["5", "8"]
 		}
 	}`
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
@@ -240,6 +241,9 @@ func TestLoad_SchoolFields(t *testing.T) {
 	}
 	if len(cfg.SchoolSenderDomains) != 1 || cfg.SchoolSenderDomains[0] != "@reykjavik.is" {
 		t.Errorf("SchoolSenderDomains = %v, want [@reykjavik.is]", cfg.SchoolSenderDomains)
+	}
+	if len(cfg.SchoolRelevantGrades) != 2 || cfg.SchoolRelevantGrades[0] != "5" || cfg.SchoolRelevantGrades[1] != "8" {
+		t.Errorf("SchoolRelevantGrades = %v, want [5 8]", cfg.SchoolRelevantGrades)
 	}
 }
 

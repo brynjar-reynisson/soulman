@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -195,11 +196,23 @@ type schoolEventJSON struct {
 // never returns a non-nil error — any failure (network, non-200, malformed
 // response) collapses to (nil events, a "extraction unavailable: ..." note,
 // nil error).
-func (c *DeepSeekClient) ExtractSchoolEvents(ctx context.Context, sender, subject, body string, referenceDate time.Time) ([]SchoolEvent, string, error) {
+// buildSchoolExtractorPrompt assembles the full extraction system prompt:
+// the always-present base (reference date filled in), an optional
+// grade-filtering clause when relevantGrades is non-empty, then the
+// JSON-shape instruction suffix.
+func buildSchoolExtractorPrompt(referenceDate time.Time, relevantGrades []string) string {
+	prompt := fmt.Sprintf(schoolEventExtractorSystemPromptBase, referenceDate.Format("2006-01-02"))
+	if len(relevantGrades) > 0 {
+		prompt += fmt.Sprintf(schoolEventExtractorSystemPromptGradeClause, strings.Join(relevantGrades, ", "))
+	}
+	return prompt + schoolEventExtractorSystemPromptSuffix
+}
+
+func (c *DeepSeekClient) ExtractSchoolEvents(ctx context.Context, sender, subject, body string, referenceDate time.Time, relevantGrades []string) ([]SchoolEvent, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
-	systemPrompt := fmt.Sprintf(schoolEventExtractorSystemPrompt, referenceDate.Format("2006-01-02"))
+	systemPrompt := buildSchoolExtractorPrompt(referenceDate, relevantGrades)
 	userMsg := fmt.Sprintf("From: %s\nSubject: %s\n\n%s", sender, subject, body)
 
 	reqBody, err := json.Marshal(chatRequest{

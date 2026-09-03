@@ -28,7 +28,7 @@ func newSchoolStimulus(sender, subject, body string, occurredAt time.Time) *comm
 }
 
 func TestSchoolEmailRule_Match_ConfiguredDomain(t *testing.T) {
-	rule := rules.NewSchoolEmailRule([]string{"@reykjavik.is"})
+	rule := rules.NewSchoolEmailRule([]string{"@reykjavik.is"}, nil)
 	s := newSchoolStimulus("teacher@reykjavik.is", "Reminder", "sweater day", time.Now())
 	if !rule.Match(s) {
 		t.Error("Match = false, want true for a configured domain")
@@ -36,7 +36,7 @@ func TestSchoolEmailRule_Match_ConfiguredDomain(t *testing.T) {
 }
 
 func TestSchoolEmailRule_Match_OtherDomain_NoMatch(t *testing.T) {
-	rule := rules.NewSchoolEmailRule([]string{"@reykjavik.is"})
+	rule := rules.NewSchoolEmailRule([]string{"@reykjavik.is"}, nil)
 	s := newSchoolStimulus("someone@example.com", "Reminder", "sweater day", time.Now())
 	if rule.Match(s) {
 		t.Error("Match = true, want false for an unconfigured domain")
@@ -44,7 +44,7 @@ func TestSchoolEmailRule_Match_OtherDomain_NoMatch(t *testing.T) {
 }
 
 func TestSchoolEmailRule_Match_NonGmailChannel_NoMatch(t *testing.T) {
-	rule := rules.NewSchoolEmailRule([]string{"@reykjavik.is"})
+	rule := rules.NewSchoolEmailRule([]string{"@reykjavik.is"}, nil)
 	s := newSchoolStimulus("teacher@reykjavik.is", "Reminder", "sweater day", time.Now())
 	s.Channel = "cli-note"
 	if rule.Match(s) {
@@ -53,7 +53,7 @@ func TestSchoolEmailRule_Match_NonGmailChannel_NoMatch(t *testing.T) {
 }
 
 func TestSchoolEmailRule_Match_CaseInsensitive(t *testing.T) {
-	rule := rules.NewSchoolEmailRule([]string{"@reykjavik.is"})
+	rule := rules.NewSchoolEmailRule([]string{"@reykjavik.is"}, nil)
 	s := newSchoolStimulus("Teacher@Reykjavik.IS", "Reminder", "sweater day", time.Now())
 	if !rule.Match(s) {
 		t.Error("Match = false, want true for a case-different domain match")
@@ -61,7 +61,7 @@ func TestSchoolEmailRule_Match_CaseInsensitive(t *testing.T) {
 }
 
 func TestSchoolEmailRule_Handle_EventsFound_HighUrgency(t *testing.T) {
-	rule := rules.NewSchoolEmailRule([]string{"@reykjavik.is"})
+	rule := rules.NewSchoolEmailRule([]string{"@reykjavik.is"}, nil)
 	occurredAt := time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC)
 	s := newSchoolStimulus("teacher@reykjavik.is", "Reminder", "Tomorrow is sweater day!", occurredAt)
 
@@ -99,8 +99,21 @@ func TestSchoolEmailRule_Handle_EventsFound_HighUrgency(t *testing.T) {
 	}
 }
 
+func TestSchoolEmailRule_Handle_ThreadsRelevantGradesToExtractor(t *testing.T) {
+	rule := rules.NewSchoolEmailRule([]string{"@reykjavik.is"}, []string{"5", "8"})
+	s := newSchoolStimulus("teacher@reykjavik.is", "Reminder", "sweater day", time.Now())
+
+	client := &fakeSummarizer{}
+	if _, err := rule.Handle(context.Background(), s, client); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if len(client.capturedGrades) != 2 || client.capturedGrades[0] != "5" || client.capturedGrades[1] != "8" {
+		t.Errorf("capturedGrades = %v, want [5 8]", client.capturedGrades)
+	}
+}
+
 func TestSchoolEmailRule_Handle_NoEvents_NormalUrgency(t *testing.T) {
-	rule := rules.NewSchoolEmailRule([]string{"@reykjavik.is"})
+	rule := rules.NewSchoolEmailRule([]string{"@reykjavik.is"}, nil)
 	s := newSchoolStimulus("info@reykjavik.is", "Notice", "unrelated municipal notice", time.Now())
 
 	client := &fakeSummarizer{extractEvents: nil}
@@ -122,7 +135,7 @@ func TestSchoolEmailRule_Handle_NoEvents_NormalUrgency(t *testing.T) {
 }
 
 func TestSchoolEmailRule_Handle_ExtractorError_NoteRecordedNoEvents(t *testing.T) {
-	rule := rules.NewSchoolEmailRule([]string{"@reykjavik.is"})
+	rule := rules.NewSchoolEmailRule([]string{"@reykjavik.is"}, nil)
 	s := newSchoolStimulus("teacher@reykjavik.is", "Reminder", "sweater day", time.Now())
 
 	client := &fakeSummarizer{extractNote: "extraction unavailable: deepseek status 500"}
@@ -147,7 +160,7 @@ func TestSchoolEmailRule_Handle_ExtractorError_NoteRecordedNoEvents(t *testing.T
 func TestMatch_FindsSchoolEmailRule_WhenPrepended(t *testing.T) {
 	orig := rules.Registry
 	defer func() { rules.Registry = orig }()
-	rules.Registry = append([]rules.Rule{rules.NewSchoolEmailRule([]string{"@reykjavik.is"})}, rules.Registry...)
+	rules.Registry = append([]rules.Rule{rules.NewSchoolEmailRule([]string{"@reykjavik.is"}, nil)}, rules.Registry...)
 
 	s := newSchoolStimulus("teacher@reykjavik.is", "Reminder", "sweater day", time.Now())
 	r := rules.Match(s)

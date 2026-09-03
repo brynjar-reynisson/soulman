@@ -2,6 +2,7 @@ package scheduler_test
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -165,6 +166,93 @@ func TestRunOnce_AlreadyResolvedChannel_NotRetried(t *testing.T) {
 	}
 	if len(inviter.created()) != 1 {
 		t.Errorf("invites = %v, want 1 — calendar was still pending", inviter.created())
+	}
+}
+
+func TestRunOnce_TwoDateOnlyEventsSameDate_AggregatedIntoOneMessageAndOneInvite(t *testing.T) {
+	root := t.TempDir()
+	now := time.Date(2026, 9, 3, 16, 0, 0, 0, time.Local)
+	id1 := schoolevents.ID("t1", 0, "2026-09-04")
+	id2 := schoolevents.ID("t2", 0, "2026-09-04")
+	schoolevents.Save(root, schoolevents.Event{ID: id1, Date: "2026-09-04", Description: "Treyjudagur - wear a shirt", Sender: "noreply@mentor.is", DiscordStatus: "pending", CalendarStatus: "pending", CreatedAt: now})
+	schoolevents.Save(root, schoolevents.Event{ID: id2, Date: "2026-09-04", Description: "Treyjudagurinn - wear jerseys", Sender: "noreply@mentor.is", DiscordStatus: "pending", CalendarStatus: "pending", CreatedAt: now})
+
+	discord := &fakeDiscordNotifier{}
+	inviter := &fakeInviter{}
+	s := scheduler.NewSchoolEventScheduler(root, "16:00", []string{"her@example.com"}, discord, inviter)
+	s.Now = func() time.Time { return now }
+	s.RunOnce()
+
+	if len(discord.sent()) != 1 {
+		t.Fatalf("discord messages = %v, want 1 aggregated message for two same-date events", discord.sent())
+	}
+	msg := discord.sent()[0]
+	if !strings.Contains(msg, "Treyjudagur - wear a shirt") || !strings.Contains(msg, "Treyjudagurinn - wear jerseys") {
+		t.Errorf("aggregated message = %q, want both descriptions present", msg)
+	}
+	if !strings.Contains(msg, "Soulman Reminder") {
+		t.Errorf("aggregated message = %q, want the Soulman Reminder label", msg)
+	}
+
+	if len(inviter.created()) != 1 {
+		t.Fatalf("invites = %v, want 1 aggregated invite for two same-date events", inviter.created())
+	}
+	inv := inviter.created()[0]
+	if !strings.Contains(inv.Summary, "Treyjudagur - wear a shirt") || !strings.Contains(inv.Summary, "Treyjudagurinn - wear jerseys") {
+		t.Errorf("invite.Summary = %q, want both descriptions present", inv.Summary)
+	}
+
+	due, _ := schoolevents.DueOrOverdue(root, now)
+	if len(due) != 0 {
+		t.Errorf("DueOrOverdue after RunOnce = %v, want empty (both events fully resolved)", due)
+	}
+}
+
+func TestRunOnce_SameDateDifferentTimes_SentAsSeparateMessagesAndInvites(t *testing.T) {
+	root := t.TempDir()
+	now := time.Date(2026, 9, 3, 16, 0, 0, 0, time.Local)
+	id1 := schoolevents.ID("t1", 0, "2026-09-04")
+	id2 := schoolevents.ID("t2", 0, "2026-09-04")
+	schoolevents.Save(root, schoolevents.Event{ID: id1, Date: "2026-09-04", HasTime: true, Time: "14:00", Description: "5th grade meeting", DiscordStatus: "pending", CalendarStatus: "pending", CreatedAt: now})
+	schoolevents.Save(root, schoolevents.Event{ID: id2, Date: "2026-09-04", HasTime: true, Time: "16:00", Description: "8th grade meeting", DiscordStatus: "pending", CalendarStatus: "pending", CreatedAt: now})
+
+	discord := &fakeDiscordNotifier{}
+	inviter := &fakeInviter{}
+	s := scheduler.NewSchoolEventScheduler(root, "16:00", []string{"her@example.com"}, discord, inviter)
+	s.Now = func() time.Time { return now }
+	s.RunOnce()
+
+	if len(discord.sent()) != 2 {
+		t.Errorf("discord messages = %v, want 2 separate messages for two different times on the same date", discord.sent())
+	}
+	if len(inviter.created()) != 2 {
+		t.Errorf("invites = %v, want 2 separate invites for two different times on the same date", inviter.created())
+	}
+}
+
+func TestRunOnce_AggregatedGroup_PartialCalendarFailure_OnlyFailedOnesStayPending(t *testing.T) {
+	root := t.TempDir()
+	now := time.Date(2026, 9, 3, 16, 0, 0, 0, time.Local)
+	id1 := schoolevents.ID("t1", 0, "2026-09-04")
+	id2 := schoolevents.ID("t2", 0, "2026-09-04")
+	schoolevents.Save(root, schoolevents.Event{ID: id1, Date: "2026-09-04", Description: "A", DiscordStatus: "sent", CalendarStatus: "pending", CreatedAt: now})
+	schoolevents.Save(root, schoolevents.Event{ID: id2, Date: "2026-09-04", Description: "B", DiscordStatus: "pending", CalendarStatus: "pending", CreatedAt: now})
+
+	discord := &fakeDiscordNotifier{}
+	inviter := &fakeInviter{}
+	s := scheduler.NewSchoolEventScheduler(root, "16:00", []string{"her@example.com"}, discord, inviter)
+	s.Now = func() time.Time { return now }
+	s.RunOnce()
+
+	// Only the still-pending event (B) is included in the Discord send,
+	// since A's Discord channel was already resolved.
+	if len(discord.sent()) != 1 || !strings.Contains(discord.sent()[0], "B") || strings.Contains(discord.sent()[0], "A") {
+		t.Errorf("discord messages = %v, want 1 message containing only B (A already sent)", discord.sent())
+	}
+	// Both A and B are still Calendar-pending, so the aggregated invite
+	// covers both.
+	if len(inviter.created()) != 1 {
+		t.Fatalf("invites = %v, want 1 aggregated invite covering both A and B", inviter.created())
 	}
 }
 

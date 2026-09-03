@@ -20,6 +20,7 @@ type Config struct {
 	ThinkingRequestSubject string
 	SchoolEnabled          bool
 	SchoolSenderDomains    []string
+	SchoolRelevantGrades   []string
 }
 
 func Load() (*Config, error) {
@@ -54,6 +55,7 @@ func Load() (*Config, error) {
 		ThinkingRequestSubject: shared.ThinkingRequestSubject,
 		SchoolEnabled:          shared.School.Enabled,
 		SchoolSenderDomains:    shared.School.SenderDomains,
+		SchoolRelevantGrades:   shared.School.RelevantGrades,
 	}, nil
 }
 

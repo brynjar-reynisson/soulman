@@ -22,6 +22,11 @@ type fakeSummarizer struct {
 	extractEvents []llm.SchoolEvent
 	extractNote   string
 	extractErr    error
+
+	// capturedGrades records the relevantGrades ExtractSchoolEvents was
+	// last called with, so tests can assert what NewSchoolEmailRule
+	// threads through.
+	capturedGrades []string
 }
 
 func (f *fakeSummarizer) Summarize(_ context.Context, _ string) (string, error) {
@@ -32,7 +37,8 @@ func (f *fakeSummarizer) ClassifyImportance(_ context.Context, _, _, _ string) (
 	return f.classifyImportant, f.classifyReason, f.classifyErr
 }
 
-func (f *fakeSummarizer) ExtractSchoolEvents(_ context.Context, _, _, _ string, _ time.Time) ([]llm.SchoolEvent, string, error) {
+func (f *fakeSummarizer) ExtractSchoolEvents(_ context.Context, _, _, _ string, _ time.Time, relevantGrades []string) ([]llm.SchoolEvent, string, error) {
+	f.capturedGrades = relevantGrades
 	return f.extractEvents, f.extractNote, f.extractErr
 }
 
