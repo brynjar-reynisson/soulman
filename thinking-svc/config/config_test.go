@@ -209,3 +209,55 @@ func TestLoad_EmptyStimulusSubject_ReturnsError(t *testing.T) {
 		t.Fatal("Load: want error for empty stimulus_subject, got nil")
 	}
 }
+
+func TestLoad_SchoolFields(t *testing.T) {
+	unsetAllEnv()
+	defer unsetAllEnv()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	content := `{
+		"nats_url": "nats://localhost:4222",
+		"stimulus_subject": "soulman.stimulus.raw",
+		"thinking_request_subject": "soulman.thinking.request",
+		"consumer_names": {"thinking_svc": "thinking-svc"},
+		"school": {
+			"enabled": true,
+			"sender_domains": ["@reykjavik.is"]
+		}
+	}`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	os.Setenv("CONFIG_PATH", path)
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.SchoolEnabled {
+		t.Error("SchoolEnabled = false, want true")
+	}
+	if len(cfg.SchoolSenderDomains) != 1 || cfg.SchoolSenderDomains[0] != "@reykjavik.is" {
+		t.Errorf("SchoolSenderDomains = %v, want [@reykjavik.is]", cfg.SchoolSenderDomains)
+	}
+}
+
+func TestLoad_MissingSchoolBlock_DefaultsDisabled(t *testing.T) {
+	unsetAllEnv()
+	defer unsetAllEnv()
+
+	configPath := writeConfigFile(t, "nats://localhost:4222", "soulman.stimulus.raw", "soulman.thinking.request", "thinking-svc")
+	os.Setenv("CONFIG_PATH", configPath)
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.SchoolEnabled {
+		t.Error("SchoolEnabled = true, want false when school block absent from config")
+	}
+	if len(cfg.SchoolSenderDomains) != 0 {
+		t.Errorf("SchoolSenderDomains = %v, want empty when school block absent from config", cfg.SchoolSenderDomains)
+	}
+}

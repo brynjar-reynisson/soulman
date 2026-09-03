@@ -52,6 +52,13 @@ func main() {
 	if cfg.DeepSeekAPIKey == "" {
 		slog.Warn("DEEPSEEK_API_KEY not set — summarization calls will fail and fall back to deterministic summaries")
 	}
+	if cfg.SchoolEnabled && len(cfg.SchoolSenderDomains) > 0 {
+		rules.Registry = append([]rules.Rule{rules.NewSchoolEmailRule(cfg.SchoolSenderDomains)}, rules.Registry...)
+		slog.Info("school-email rule enabled", "sender_domains", cfg.SchoolSenderDomains)
+	} else {
+		slog.Info("school-email rule disabled", "enabled", cfg.SchoolEnabled, "sender_domains_count", len(cfg.SchoolSenderDomains))
+	}
+
 	summarizer := llm.NewDeepSeekClient(
 		cfg.DeepSeekAPIKey,
 		cfg.DeepSeekBaseURL,
