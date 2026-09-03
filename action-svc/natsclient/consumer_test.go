@@ -54,6 +54,7 @@ func (h *recordingHandler) countOf(want string) int {
 }
 
 func TestConsumer_ReceivesMessage(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 	nc, err := nats.Connect(url)
 	if err != nil {
@@ -97,6 +98,7 @@ func TestConsumer_ReceivesMessage(t *testing.T) {
 }
 
 func TestConsumer_HandlerPanicsNever_StillACKsExactlyOnce(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 	nc, err := nats.Connect(url)
 	if err != nil {
@@ -150,6 +152,7 @@ func TestConsumer_HandlerPanicsNever_StillACKsExactlyOnce(t *testing.T) {
 }
 
 func TestConsumer_SurvivesRestartAfterDowntime(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 	nc, err := nats.Connect(url)
 	if err != nil {

@@ -21,6 +21,22 @@ func natsURL() string {
 	return "nats://localhost:4222"
 }
 
+// requireNATSIntegration skips the calling test unless explicitly opted
+// in. natsURL() defaults to nats://localhost:4222 — the exact NATS server
+// soulman-dev and soulman-prod both run against — so without this guard, a
+// routine `go test ./...` publishes real-looking stimuli (Source:
+// folder-watcher, Authenticated: true) straight onto the live production
+// subject, which the real thinking-svc consumer picks up and (since
+// ErrorReportRule always marks folder-watcher stimuli Important) turns
+// into an unwanted real-time Discord notification. See perception-svc's
+// NOTES.md for the incident this fixed.
+func requireNATSIntegration(t *testing.T) {
+	t.Helper()
+	if os.Getenv("SOULMAN_NATS_INTEGRATION_TESTS") == "" {
+		t.Skip("set SOULMAN_NATS_INTEGRATION_TESTS=1 to run tests against a live NATS server — these publish/consume on the real dev/prod subjects that live services also read from")
+	}
+}
+
 // TestNew_UnreachableNATS_DoesNotBlock does not require a live NATS — it
 // verifies the spec's "HTTP server still starts" requirement: New() must
 // return quickly (not hang, not error) even against an address nothing is
@@ -42,6 +58,7 @@ func TestNew_UnreachableNATS_DoesNotBlock(t *testing.T) {
 }
 
 func TestPublisher_PublishAndStatus(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 
 	probe, err := nats.Connect(url)

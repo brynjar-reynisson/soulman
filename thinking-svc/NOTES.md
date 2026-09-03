@@ -40,6 +40,10 @@ Unlike `SystemMonitorRule` (`warning` is not important) or `GmailTriageRule` (De
 
 The `ExtractSchoolEvents` DeepSeek prompt resolves relative dates and times (e.g. "next Tuesday 10am") against the email's own `received_at` / `OccurredAt` timestamp, not against real "now" — **this is critical for correctness when backfilling historical mail** (see `cli/NOTES.md` for the `school-backfill` tool). A stimulus for an email dated August 15th that says "next Tuesday" should resolve to a date relative to August 15th, not relative to today. If this logic ever changes to use `time.Now()` instead, backfill will break silently, producing incorrect future dates for historical events.
 
+## Test suites were polluting live NATS (incident, 2026-09-03)
+
+`natsclient/consumer_test.go` and `natsclient/publisher_test.go` connected to the real shared dev/prod NATS server by default and published test payloads onto the real `soulman.stimulus.raw`/`soulman.thinking.request` subjects — a routine `go test ./...` produced real Discord noise and log errors in prod. Every live-NATS test in this package now requires `SOULMAN_NATS_INTEGRATION_TESTS=1` to run (skipped otherwise). Full incident writeup and root cause: `perception-svc/NOTES.md`.
+
 ## Leveled logging (log/slog, added 2026-07-27)
 
 All `log.Printf`/`log.Fatalf` call sites in `main.go` and `natsclient/consumer.go` replaced with stdlib `log/slog` (`slog.Error`/`slog.Warn`/`slog.Info`) — no new dependency. Unparseable stimuli and rule-handling failures (dropped, no redelivery for `soulman.thinking.request`) are `slog.Error`; a blank `DEEPSEEK_API_KEY` (non-fatal, falls back to deterministic summaries) is `slog.Warn`; started/listening/shutting-down messages are `slog.Info`. Startup `log.Fatalf` calls became `slog.Error(...)` followed by an explicit `os.Exit(1)`.

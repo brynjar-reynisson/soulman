@@ -20,6 +20,22 @@ func natsURL() string {
 	return "nats://localhost:4222"
 }
 
+// requireNATSIntegration skips the calling test unless explicitly opted
+// in. natsURL() defaults to nats://localhost:4222 — the exact NATS server
+// soulman-dev and soulman-prod both run against — so without this guard, a
+// routine `go test ./...` publishes onto the real live
+// soulman.thinking.request / soulman.memory.write subjects, which the real
+// action-svc/memory-svc consumers pick up (a malformed test ActionRequest
+// causing a real "unknown action_hint, dropping" drop; a test
+// OutcomeRecord becoming a real episode row in Postgres). See
+// perception-svc's NOTES.md for the incident this fixed.
+func requireNATSIntegration(t *testing.T) {
+	t.Helper()
+	if os.Getenv("SOULMAN_NATS_INTEGRATION_TESTS") == "" {
+		t.Skip("set SOULMAN_NATS_INTEGRATION_TESTS=1 to run tests against a live NATS server — these publish/consume on the real dev/prod subjects that live services also read from")
+	}
+}
+
 // TestConnect_RetriesInBackgroundWhenServerUnreachable proves the core
 // behavioral change from Finding 1: previously nats.Connect against an
 // unreachable server returned a connection-refused error immediately; now
@@ -36,6 +52,7 @@ func TestConnect_RetriesInBackgroundWhenServerUnreachable(t *testing.T) {
 }
 
 func TestPublisher_PublishOutcome(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 	nc, err := nats.Connect(url)
 	if err != nil {
@@ -90,6 +107,7 @@ func TestPublisher_PublishOutcome(t *testing.T) {
 }
 
 func TestNewPublisher_CreatesMemoryWriteStream(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 	nc, err := nats.Connect(url)
 	if err != nil {

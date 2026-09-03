@@ -20,21 +20,42 @@ func TestMain(m *testing.M) {
 	// Purge any lingering messages from previous test runs so new consumers
 	// (which start from the beginning of the stream by default) aren't flooded
 	// with old NAK'd messages.
-	nc, err := nats.Connect(natsURL())
-	if err == nil {
-		if js, err := jetstream.New(nc); err == nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			if stream, err := js.Stream(ctx, "STIMULUS"); err == nil {
-				stream.Purge(ctx)
+	//
+	// natsURL() defaults to nats://localhost:4222 — the exact NATS server
+	// soulman-dev and soulman-prod both run against — so this purge is
+	// gated behind the same opt-in env var every test in this package
+	// checks via requireNATSIntegration. Without the gate, a routine
+	// `go test ./...` would silently delete every unconsumed real message
+	// sitting in the live STIMULUS/MEMORY_WRITE streams. Even with the var
+	// set, this still purges the real shared streams — only run these
+	// tests deliberately. See perception-svc's NOTES.md for the incident
+	// this fixed.
+	if os.Getenv("SOULMAN_NATS_INTEGRATION_TESTS") != "" {
+		nc, err := nats.Connect(natsURL())
+		if err == nil {
+			if js, err := jetstream.New(nc); err == nil {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				if stream, err := js.Stream(ctx, "STIMULUS"); err == nil {
+					stream.Purge(ctx)
+				}
+				if stream, err := js.Stream(ctx, "MEMORY_WRITE"); err == nil {
+					stream.Purge(ctx)
+				}
+				cancel()
 			}
-			if stream, err := js.Stream(ctx, "MEMORY_WRITE"); err == nil {
-				stream.Purge(ctx)
-			}
-			cancel()
+			nc.Close()
 		}
-		nc.Close()
 	}
 	os.Exit(m.Run())
+}
+
+// requireNATSIntegration skips the calling test unless explicitly opted
+// in — see TestMain's comment above for why.
+func requireNATSIntegration(t *testing.T) {
+	t.Helper()
+	if os.Getenv("SOULMAN_NATS_INTEGRATION_TESTS") == "" {
+		t.Skip("set SOULMAN_NATS_INTEGRATION_TESTS=1 to run tests against a live NATS server — these publish/consume on the real dev/prod subjects that live services also read from")
+	}
 }
 
 type mockWriter struct {
@@ -57,6 +78,7 @@ func natsURL() string {
 }
 
 func TestConsumer_ReceivesMessage(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 
 	// Connect publisher
@@ -125,6 +147,7 @@ func TestConsumer_ReceivesMessage(t *testing.T) {
 }
 
 func TestConsumer_BadJSON_IsACKedAndSkipped(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 	nc, err := nats.Connect(url)
 	if err != nil {
@@ -207,6 +230,7 @@ func (w *countingErrWriter) Count() int {
 }
 
 func TestConsumer_WriteError_NaksMessage(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 	nc, err := nats.Connect(url)
 	if err != nil {

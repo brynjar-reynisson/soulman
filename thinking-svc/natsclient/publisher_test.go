@@ -12,6 +12,7 @@ import (
 )
 
 func TestPublisher_Publish_DeliversToSubject(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 	nc, err := nats.Connect(url)
 	if err != nil {
@@ -62,6 +63,7 @@ func TestPublisher_Publish_DeliversToSubject(t *testing.T) {
 }
 
 func TestNewPublisher_CreatesThinkingRequestStream(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 	nc, err := nats.Connect(url)
 	if err != nil {

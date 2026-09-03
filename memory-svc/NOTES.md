@@ -2,6 +2,10 @@
 
 Incidents, gotchas, and decisions learned running this service — not captured in the design specs themselves (see `CLAUDE.md`'s Services section for spec links).
 
+## Test suites were polluting live NATS (incident, 2026-09-03)
+
+`natsconsumer/consumer_test.go` and `natsconsumer/memory_write_consumer_test.go` connected to the real shared dev/prod NATS server by default and published test payloads onto the real `soulman.stimulus.raw`/`soulman.memory.write` subjects — fake `OutcomeRecord`s landed as genuine episode rows in Postgres, and `consumer_test.go`'s `TestMain` unconditionally **purged the real `STIMULUS` and `MEMORY_WRITE` JetStream streams** on every test run, silently deleting any unconsumed real message. Every live-NATS test (and the `TestMain` purge) now requires `SOULMAN_NATS_INTEGRATION_TESTS=1` to run. Full incident writeup and root cause: `perception-svc/NOTES.md`.
+
 ## Episodes consumer has no file-log/replay layer
 
 Unlike the STIMULUS consumer (`natsconsumer.Consumer`), `MemoryWriteConsumer` doesn't write to a local file log before acking — on a DB write failure it NAKs and relies purely on JetStream's own 30-day `MEMORY_WRITE` retention for redelivery. This was a deliberate first-cut simplification (see `docs/superpowers/specs/2026-07-18-memory-episodes-design.md`), not an oversight: episodes aren't the sacred immutable audit log `raw_inputs` is, so skipping the extra local-durability layer was an acceptable tradeoff against duplicating the STIMULUS consumer's more complex replay machinery for a second stream.

@@ -39,6 +39,7 @@ func (m *mockEpisodeWriter) hasTaskID(taskID string) bool {
 }
 
 func TestMemoryWriteConsumer_ReceivesMessage(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 	nc, err := nats.Connect(url)
 	if err != nil {
@@ -84,6 +85,7 @@ func TestMemoryWriteConsumer_ReceivesMessage(t *testing.T) {
 }
 
 func TestMemoryWriteConsumer_BadJSON_IsACKedAndSkipped(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 	nc, err := nats.Connect(url)
 	if err != nil {
@@ -132,6 +134,7 @@ func TestMemoryWriteConsumer_BadJSON_IsACKedAndSkipped(t *testing.T) {
 }
 
 func TestMemoryWriteConsumer_UnknownType_IsACKedAndSkipped(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 	nc, err := nats.Connect(url)
 	if err != nil {
@@ -191,6 +194,7 @@ func (w *countingErrEpisodeWriter) Count() int {
 }
 
 func TestMemoryWriteConsumer_WriteError_NaksMessage(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 	nc, err := nats.Connect(url)
 	if err != nil {

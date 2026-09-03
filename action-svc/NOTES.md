@@ -2,6 +2,10 @@
 
 Incidents, gotchas, and decisions learned running this service — not captured in the design specs themselves (see `CLAUDE.md`'s Services section for spec links).
 
+## Test suites were polluting live NATS (incident, 2026-09-03)
+
+`natsclient/consumer_test.go` and `natsclient/natsclient_test.go` connected to the real shared dev/prod NATS server by default and published test payloads onto the real `soulman.thinking.request`/`soulman.memory.write` subjects — a malformed test `ActionRequest` triggered a real `"unknown action_hint, dropping"` error in prod, and a fake `OutcomeRecord` became a real episode row in Postgres. Every live-NATS test in this package now requires `SOULMAN_NATS_INTEGRATION_TESTS=1` to run. Full incident writeup and root cause: `perception-svc/NOTES.md`.
+
 ## Dispatch handlers
 
 - `append_daily_report_entry` — writes a `report.Entry` to `$SOULMAN_ROOT/reports/`. Entries are filed under the entry's **`OccurredAt` date, not the processing date** — if you're auditing "what happened today," search every report file the event could plausibly belong to, not just today's, or you'll conclude data is missing when it isn't (this happened once: apparent "missing" Discord-reported emails turned out to be filed correctly under their original date).

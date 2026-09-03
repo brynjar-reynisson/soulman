@@ -48,7 +48,24 @@ func natsURL() string {
 	return "nats://localhost:4222"
 }
 
+// requireNATSIntegration skips the calling test unless explicitly opted
+// in. natsURL() defaults to nats://localhost:4222 — the exact NATS server
+// soulman-dev and soulman-prod both run against — so without this guard, a
+// routine `go test ./...` publishes onto the real live
+// soulman.stimulus.raw / soulman.thinking.request subjects, which the real
+// thinking-svc/action-svc consumers pick up (e.g. an unparseable-payload
+// test causing a real "unparseable message" error, or a malformed
+// ActionRequest triggering a real "unknown action_hint, dropping" drop).
+// See perception-svc's NOTES.md for the incident this fixed.
+func requireNATSIntegration(t *testing.T) {
+	t.Helper()
+	if os.Getenv("SOULMAN_NATS_INTEGRATION_TESTS") == "" {
+		t.Skip("set SOULMAN_NATS_INTEGRATION_TESTS=1 to run tests against a live NATS server — these publish/consume on the real dev/prod subjects that live services also read from")
+	}
+}
+
 func TestConsumer_ReceivesAndHandlesMessage(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 	nc, err := nats.Connect(url)
 	if err != nil {
@@ -100,6 +117,7 @@ func TestConsumer_ReceivesAndHandlesMessage(t *testing.T) {
 }
 
 func TestConsumer_BadJSON_IsACKedAndSkipped(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 	nc, err := nats.Connect(url)
 	if err != nil {
@@ -154,6 +172,7 @@ func TestConsumer_BadJSON_IsACKedAndSkipped(t *testing.T) {
 }
 
 func TestConsumer_HandlerError_StillACKsExactlyOnce(t *testing.T) {
+	requireNATSIntegration(t)
 	url := natsURL()
 	nc, err := nats.Connect(url)
 	if err != nil {
