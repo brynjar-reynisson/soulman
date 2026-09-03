@@ -43,7 +43,7 @@ type Event struct {
 // rerun, or perception-svc's at-least-once redelivery — overwrites the
 // same file instead of creating a duplicate pending reminder.
 func ID(threadID string, index int, date string) string {
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%s", threadID, index, date)))
+	h := sha256.Sum256(fmt.Appendf(nil, "%s|%d|%s", threadID, index, date))
 	return hex.EncodeToString(h[:])[:16]
 }
 
@@ -128,8 +128,9 @@ func DueOrOverdue(root string, now time.Time) ([]Event, error) {
 		return nil, fmt.Errorf("schoolevents: read dir: %w", err)
 	}
 
-	tomorrow := now.AddDate(0, 0, 1)
-	cutoff := now.AddDate(0, 0, -staleCutoffDays)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	tomorrow := today.AddDate(0, 0, 1)
+	cutoff := today.AddDate(0, 0, -staleCutoffDays)
 
 	var due []Event
 	for _, entry := range entries {

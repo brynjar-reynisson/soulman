@@ -81,6 +81,27 @@ func TestDueOrOverdue_StaleBeyondCutoff_NotReturned(t *testing.T) {
 	}
 }
 
+func TestDueOrOverdue_BoundaryAt2DaysStale_WithNonMidnightNow_IsIncluded(t *testing.T) {
+	root := t.TempDir()
+	// now is at noon, 2 calendar days past the event date.
+	// This tests that date comparison is calendar-day-based, not wall-clock-based.
+	// Event on 2026-09-08, now is 2026-09-10T12:00 — exactly at the 2-day boundary.
+	now := time.Date(2026, 9, 10, 12, 0, 0, 0, time.Local)
+	e := schoolevents.Event{
+		ID: schoolevents.ID("t1", 0, "2026-09-08"), Date: "2026-09-08",
+		DiscordStatus: "pending", CalendarStatus: "pending", CreatedAt: now,
+	}
+	schoolevents.Save(root, e)
+
+	due, err := schoolevents.DueOrOverdue(root, now)
+	if err != nil {
+		t.Fatalf("DueOrOverdue: %v", err)
+	}
+	if len(due) != 1 || due[0].ID != e.ID {
+		t.Errorf("DueOrOverdue = %v, want 1 entry at the 2-day stale boundary", due)
+	}
+}
+
 func TestMarkDiscordSent_ExcludesFromFutureDueOrOverdue_WhenCalendarAlsoResolved(t *testing.T) {
 	root := t.TempDir()
 	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.Local)
