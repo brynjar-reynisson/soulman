@@ -65,6 +65,6 @@ The `SchoolEventScheduler` wakes daily at the configured `school.notify_time` (d
 
 Calendar invites are sent via a new OAuth scope (`calendar.events`). Setup requires three env vars: `CALENDAR_CLIENT_ID`, `CALENDAR_CLIENT_SECRET`, and `CALENDAR_REFRESH_TOKEN` — all non-fatal if blank (a send failure is logged like any other, and does not prevent the Discord reminder from being sent). Recipient email(s) come from the shared config's `school.calendar_recipient_emails` — no invites are sent until that list is populated.
 
-A hardcoded 2-day stale cutoff filters events during the catch-up on startup: any event already in the store with `start_time` earlier than 2 days ago is not re-sent, even if a calendar send previously failed. This prevents a restart during backlog catchup from re-notifying about events that already happened.
+A hardcoded 2-day stale cutoff filters events on every run, not just the startup catch-up: any event whose `date` is more than 2 days past is dropped by `DueOrOverdue` on every run, tick or startup catch-up alike, even if a calendar send previously failed. This prevents a restart during backlog catchup — or an ordinary daily tick — from re-notifying about events that already happened.
 
-## Leveled logging (log/slog, added 2026-07-27)
+See `docs/superpowers/specs/2026-09-03-school-email-events-design.md`'s OAuth Setup section for the manual bootstrap steps (enable Calendar API, create OAuth client, consent flow, Production publishing status) — not automated by any code in this repo.

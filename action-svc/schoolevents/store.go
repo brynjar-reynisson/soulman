@@ -64,6 +64,12 @@ func Save(root string, e Event) error {
 		if existing.DiscordStatus != "pending" && existing.CalendarStatus != "pending" {
 			return nil
 		}
+		if existing.DiscordStatus != "pending" {
+			e.DiscordStatus = existing.DiscordStatus
+		}
+		if existing.CalendarStatus != "pending" {
+			e.CalendarStatus = existing.CalendarStatus
+		}
 	}
 
 	if err := os.MkdirAll(dir(root), 0o755); err != nil {

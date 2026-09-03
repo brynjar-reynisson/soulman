@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"soulman/action-svc/calendar"
@@ -37,6 +38,12 @@ type SchoolEventScheduler struct {
 	discordNotifier notify.Notifier
 	inviter         EventInviter
 	stop            chan struct{}
+
+	// mu serializes RunOnce so the immediate Start() catch-up and the wake
+	// loop's first tick (which can land almost back-to-back if the process
+	// starts shortly before notifyTime) never race on schoolevents' file
+	// operations.
+	mu sync.Mutex
 
 	Now         func() time.Time
 	BackoffBase time.Duration
@@ -100,6 +107,9 @@ func (s *SchoolEventScheduler) nextRun(from time.Time) time.Time {
 // channel. Each event's Discord and Calendar attempts are independent: a
 // failure in one never blocks or re-triggers the other.
 func (s *SchoolEventScheduler) RunOnce() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	due, err := schoolevents.DueOrOverdue(s.root, s.Now())
 	if err != nil {
 		slog.Error("scheduler: school events lookup failed", "error", err)
@@ -150,6 +160,7 @@ func (s *SchoolEventScheduler) sendDiscordWithRetry(message string) error {
 		if err == nil {
 			return nil
 		}
+		slog.Warn("scheduler: notifier send attempt failed", "attempt", attempt, "max_attempts", 3, "error", err)
 		if attempt < 3 {
 			time.Sleep(backoff)
 			backoff *= 2

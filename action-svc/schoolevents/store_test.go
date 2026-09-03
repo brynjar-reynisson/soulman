@@ -173,6 +173,38 @@ func TestSave_Idempotent_DoesNotResurrectFullyResolvedEvent(t *testing.T) {
 	}
 }
 
+func TestSave_PreservesAlreadyResolvedStatus_OnReprocessing(t *testing.T) {
+	root := t.TempDir()
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.Local)
+	id := schoolevents.ID("t1", 0, "2026-09-04")
+	schoolevents.Save(root, schoolevents.Event{ID: id, Date: "2026-09-04", DiscordStatus: "pending", CalendarStatus: "pending", CreatedAt: now})
+
+	if err := schoolevents.MarkDiscordSent(root, id); err != nil {
+		t.Fatalf("MarkDiscordSent: %v", err)
+	}
+
+	// Re-processing the same email (JetStream redelivery, or a backfill
+	// rerun) always calls Save with both channels "pending" again — this
+	// must not reset the already-sent Discord status back to pending.
+	if err := schoolevents.Save(root, schoolevents.Event{ID: id, Date: "2026-09-04", DiscordStatus: "pending", CalendarStatus: "pending", CreatedAt: now}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	due, err := schoolevents.DueOrOverdue(root, now)
+	if err != nil {
+		t.Fatalf("DueOrOverdue: %v", err)
+	}
+	if len(due) != 1 {
+		t.Fatalf("DueOrOverdue = %v, want 1 entry (CalendarStatus still pending)", due)
+	}
+	if due[0].DiscordStatus != "sent" {
+		t.Errorf("DiscordStatus = %q, want %q to be preserved across reprocessing", due[0].DiscordStatus, "sent")
+	}
+	if due[0].CalendarStatus != "pending" {
+		t.Errorf("CalendarStatus = %q, want %q unaffected", due[0].CalendarStatus, "pending")
+	}
+}
+
 func TestDueOrOverdue_MissingDirectory_ReturnsEmptyNotError(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "does-not-exist-yet")
 	due, err := schoolevents.DueOrOverdue(root, time.Now())
