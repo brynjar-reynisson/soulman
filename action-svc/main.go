@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"soulman/action-svc/calendar"
 	"soulman/action-svc/config"
 	"soulman/action-svc/dispatch"
 	"soulman/action-svc/dnd"
@@ -121,6 +122,30 @@ func main() {
 	sched := scheduler.New(cfg.SoulmanRoot, cfg.ReportSendTime, notifier, schedPublisher, gate)
 	sched.Start()
 	defer sched.Stop()
+
+	// School event reminders — prod-only via cfg.SchoolEnabled (see
+	// docs/superpowers/specs/2026-09-03-school-email-events-design.md).
+	// Deliberately its own plain Discord notifier, NOT feign- or DND-wrapped —
+	// this feature ships live from day one.
+	if cfg.SchoolEnabled {
+		schoolDiscord := notify.NewDiscordNotifier(cfg.DiscordBotToken, cfg.DiscordChannelID)
+
+		var inviter scheduler.EventInviter
+		if cfg.CalendarClientID != "" && cfg.CalendarClientSecret != "" && cfg.CalendarRefreshToken != "" {
+			calClient, calErr := calendar.New(ctx, cfg.CalendarClientID, cfg.CalendarClientSecret, cfg.CalendarRefreshToken)
+			if calErr != nil {
+				slog.Warn("calendar client init failed — calendar invites will fail until fixed", "error", calErr)
+			} else {
+				inviter = calClient
+			}
+		} else {
+			slog.Warn("CALENDAR_CLIENT_ID/SECRET/REFRESH_TOKEN not fully set — calendar invites will fail until configured")
+		}
+
+		schoolSched := scheduler.NewSchoolEventScheduler(cfg.SoulmanRoot, cfg.SchoolNotifyTime, cfg.SchoolCalendarRecipientEmails, schoolDiscord, inviter)
+		schoolSched.Start()
+		defer schoolSched.Stop()
+	}
 
 	// HTTP server (non-blocking)
 	srv := httpserver.New(cfg.HTTPPort)

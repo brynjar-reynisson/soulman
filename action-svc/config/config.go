@@ -22,6 +22,13 @@ type Config struct {
 	DNDEnabled             bool
 	DNDStart               string
 	DNDEnd                 string
+
+	SchoolEnabled                 bool
+	SchoolNotifyTime              string
+	SchoolCalendarRecipientEmails []string
+	CalendarClientID              string
+	CalendarClientSecret          string
+	CalendarRefreshToken          string
 }
 
 func Load() (*Config, error) {
@@ -59,6 +66,13 @@ func Load() (*Config, error) {
 		DNDEnabled:             shared.DoNotDisturb.Enabled,
 		DNDStart:               shared.DoNotDisturb.Start,
 		DNDEnd:                 shared.DoNotDisturb.End,
+
+		SchoolEnabled:                 shared.School.Enabled,
+		SchoolNotifyTime:              orDefault(shared.School.NotifyTime, "16:00"),
+		SchoolCalendarRecipientEmails: shared.School.CalendarRecipientEmails,
+		CalendarClientID:              env("CALENDAR_CLIENT_ID", ""),
+		CalendarClientSecret:          env("CALENDAR_CLIENT_SECRET", ""),
+		CalendarRefreshToken:          env("CALENDAR_REFRESH_TOKEN", ""),
 	}, nil
 }
 
@@ -67,4 +81,11 @@ func env(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func orDefault(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
 }

@@ -48,6 +48,9 @@ func unsetAllEnv() {
 	os.Unsetenv("REPORT_NOTIFIER")
 	os.Unsetenv("DISCORD_BOT_TOKEN")
 	os.Unsetenv("DISCORD_CHANNEL_ID")
+	os.Unsetenv("CALENDAR_CLIENT_ID")
+	os.Unsetenv("CALENDAR_CLIENT_SECRET")
+	os.Unsetenv("CALENDAR_REFRESH_TOKEN")
 }
 
 func TestLoad_Defaults(t *testing.T) {
@@ -334,5 +337,73 @@ func TestLoad_DoNotDisturb_MalformedTime_PassesThroughWithoutError(t *testing.T)
 	}
 	if cfg.DNDStart != "not-a-time" {
 		t.Errorf("DNDStart = %q, want the malformed value passed through unchanged", cfg.DNDStart)
+	}
+}
+
+func TestLoad_SchoolFields(t *testing.T) {
+	unsetAllEnv()
+	defer unsetAllEnv()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	content := `{
+		"nats_url": "nats://localhost:4222",
+		"thinking_request_subject": "soulman.thinking.request",
+		"memory_write_subject": "soulman.memory.write",
+		"consumer_names": {"action_svc": "action-svc"},
+		"school": {
+			"enabled": true,
+			"notify_time": "16:00",
+			"calendar_recipient_emails": ["joninasveins@gmail.com"]
+		}
+	}`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	os.Setenv("CONFIG_PATH", path)
+	os.Setenv("CALENDAR_CLIENT_ID", "id-123")
+	os.Setenv("CALENDAR_CLIENT_SECRET", "secret-456")
+	os.Setenv("CALENDAR_REFRESH_TOKEN", "refresh-789")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.SchoolEnabled {
+		t.Error("SchoolEnabled = false, want true")
+	}
+	if cfg.SchoolNotifyTime != "16:00" {
+		t.Errorf("SchoolNotifyTime = %q, want 16:00", cfg.SchoolNotifyTime)
+	}
+	if len(cfg.SchoolCalendarRecipientEmails) != 1 || cfg.SchoolCalendarRecipientEmails[0] != "joninasveins@gmail.com" {
+		t.Errorf("SchoolCalendarRecipientEmails = %v, want [joninasveins@gmail.com]", cfg.SchoolCalendarRecipientEmails)
+	}
+	if cfg.CalendarClientID != "id-123" || cfg.CalendarClientSecret != "secret-456" || cfg.CalendarRefreshToken != "refresh-789" {
+		t.Errorf("Calendar creds = %q/%q/%q, want id-123/secret-456/refresh-789", cfg.CalendarClientID, cfg.CalendarClientSecret, cfg.CalendarRefreshToken)
+	}
+}
+
+func TestLoad_SchoolFieldsAbsent_Defaults(t *testing.T) {
+	unsetAllEnv()
+	defer unsetAllEnv()
+
+	configPath := writeConfigFile(t, "nats://localhost:4222", "soulman.thinking.request", "soulman.memory.write", "action-svc")
+	os.Setenv("CONFIG_PATH", configPath)
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.SchoolEnabled {
+		t.Error("SchoolEnabled = true, want false when school block absent")
+	}
+	if cfg.SchoolNotifyTime != "16:00" {
+		t.Errorf("SchoolNotifyTime = %q, want default 16:00 when notify_time absent", cfg.SchoolNotifyTime)
+	}
+	if len(cfg.SchoolCalendarRecipientEmails) != 0 {
+		t.Errorf("SchoolCalendarRecipientEmails = %v, want empty", cfg.SchoolCalendarRecipientEmails)
+	}
+	if cfg.CalendarClientID != "" || cfg.CalendarClientSecret != "" || cfg.CalendarRefreshToken != "" {
+		t.Error("Calendar creds should default to empty strings when env vars are unset")
 	}
 }
