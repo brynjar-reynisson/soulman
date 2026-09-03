@@ -350,3 +350,57 @@ func TestLoad_MissingFeignMode_DefaultsFalse(t *testing.T) {
 		t.Error("FeignMode = true, want false when absent from JSON")
 	}
 }
+
+func TestLoad_SchoolFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	content := `{
+		"watch_paths": ["C:\\a\\errors"],
+		"school": {
+			"enabled": true,
+			"sender_domains": ["@reykjavik.is"],
+			"notify_time": "16:00",
+			"calendar_recipient_emails": ["joninasveins@gmail.com"]
+		}
+	}`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cfg, err := sharedconfig.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if !cfg.School.Enabled {
+		t.Error("School.Enabled = false, want true")
+	}
+	if len(cfg.School.SenderDomains) != 1 || cfg.School.SenderDomains[0] != "@reykjavik.is" {
+		t.Errorf("School.SenderDomains = %v, want [@reykjavik.is]", cfg.School.SenderDomains)
+	}
+	if cfg.School.NotifyTime != "16:00" {
+		t.Errorf("School.NotifyTime = %q, want 16:00", cfg.School.NotifyTime)
+	}
+	if len(cfg.School.CalendarRecipientEmails) != 1 || cfg.School.CalendarRecipientEmails[0] != "joninasveins@gmail.com" {
+		t.Errorf("School.CalendarRecipientEmails = %v, want [joninasveins@gmail.com]", cfg.School.CalendarRecipientEmails)
+	}
+}
+
+func TestLoad_MissingSchoolField_ZeroValue(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(path, []byte(`{"watch_paths": []}`), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cfg, err := sharedconfig.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.School.Enabled {
+		t.Error("School.Enabled = true, want false when school block absent from JSON")
+	}
+	if len(cfg.School.SenderDomains) != 0 {
+		t.Errorf("School.SenderDomains = %v, want empty when school block absent from JSON", cfg.School.SenderDomains)
+	}
+}

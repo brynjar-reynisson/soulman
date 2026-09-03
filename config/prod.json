@@ -54,5 +54,11 @@
       { "label": "Pictures", "path": "C:\\Users\\Lenovo\\Pictures" }
     ],
     "share_link_ttl_minutes": 60
+  },
+  "school": {
+    "enabled": true,
+    "sender_domains": ["@reykjavik.is"],
+    "notify_time": "16:00",
+    "calendar_recipient_emails": []
   }
 }

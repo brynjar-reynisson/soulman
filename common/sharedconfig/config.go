@@ -31,6 +31,7 @@ type Config struct {
 	LogMonitor    LogMonitorConfig    `json:"log_monitor"`
 	DoNotDisturb  DNDConfig           `json:"do_not_disturb"`
 	Web           WebConfig           `json:"web"`
+	School        SchoolConfig        `json:"school"`
 }
 
 // ConsumerNames holds the JetStream durable consumer name for each service
@@ -116,6 +117,20 @@ type DNDConfig struct {
 	Enabled bool   `json:"enabled"`
 	Start   string `json:"start"`
 	End     string `json:"end"`
+}
+
+// SchoolConfig holds the school-email-events feature's settings, shared
+// between thinking-svc (SenderDomains, Enabled) and action-svc (Enabled,
+// NotifyTime, CalendarRecipientEmails). Enabled is false in dev.json and
+// true in prod.json — dev and prod poll the same real inbox, so running
+// this feature in both would create duplicate Calendar invites and
+// duplicate Discord messages. See
+// docs/superpowers/specs/2026-09-03-school-email-events-design.md.
+type SchoolConfig struct {
+	Enabled                 bool     `json:"enabled"`
+	SenderDomains           []string `json:"sender_domains"`
+	NotifyTime              string   `json:"notify_time"`
+	CalendarRecipientEmails []string `json:"calendar_recipient_emails"`
 }
 
 // ClaudeProjectRoot is one curated project-folder root the Claude
