@@ -44,7 +44,11 @@ func runSchoolBackfill(baseURL, since string, dryRun bool) error {
 		return fmt.Errorf("build gmail service: %w", err)
 	}
 
-	query := fmt.Sprintf("from:*@reykjavik.is after:%s", strings.ReplaceAll(since, "-", "/"))
+	// Gmail search has no glob wildcard support - "from:*@domain" matches
+	// nothing (no real address contains a literal "*"). "from:@domain" is
+	// Gmail's actual supported syntax for "sender's address is at this
+	// domain".
+	query := fmt.Sprintf("from:@reykjavik.is after:%s", strings.ReplaceAll(since, "-", "/"))
 	var ids []string
 	if err := svc.Users.Messages.List("me").Q(query).Pages(ctx, func(resp *gmail.ListMessagesResponse) error {
 		for _, m := range resp.Messages {
