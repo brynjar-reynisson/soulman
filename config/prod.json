@@ -57,7 +57,7 @@
   },
   "school": {
     "enabled": true,
-    "sender_domains": ["@reykjavik.is"],
+    "sender_domains": ["@reykjavik.is", "@mentor.is"],
     "notify_time": "16:00",
     "calendar_recipient_emails": []
   }

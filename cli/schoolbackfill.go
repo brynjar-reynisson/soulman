@@ -47,8 +47,11 @@ func runSchoolBackfill(baseURL, since string, dryRun bool) error {
 	// Gmail search has no glob wildcard support - "from:*@domain" matches
 	// nothing (no real address contains a literal "*"). "from:@domain" is
 	// Gmail's actual supported syntax for "sender's address is at this
-	// domain".
-	query := fmt.Sprintf("from:@reykjavik.is after:%s", strings.ReplaceAll(since, "-", "/"))
+	// domain". Two domains: teachers sometimes send directly from
+	// @reykjavik.is, but most school notifications relay through the
+	// Mentor school-information platform (noreply@mentor.is) - matches
+	// school.sender_domains in config/prod.json.
+	query := fmt.Sprintf("(from:@reykjavik.is OR from:@mentor.is) after:%s", strings.ReplaceAll(since, "-", "/"))
 	var ids []string
 	if err := svc.Users.Messages.List("me").Q(query).Pages(ctx, func(resp *gmail.ListMessagesResponse) error {
 		for _, m := range resp.Messages {
