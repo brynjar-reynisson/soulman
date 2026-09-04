@@ -8,9 +8,10 @@ import { ObsidianPage } from './components/ObsidianPage';
 import { ClaudePage } from './components/ClaudePage';
 import { FilesPage } from './components/FilesPage';
 import { SearchPage } from './components/SearchPage';
+import { ProjectsPage } from './components/ProjectsPage';
 import { getParam, setParams } from './urlState';
 
-type ViewState = 'loading' | 'login' | 'restricted' | 'dashboard' | 'obsidian' | 'claude' | 'files' | 'search';
+type ViewState = 'loading' | 'login' | 'restricted' | 'dashboard' | 'obsidian' | 'claude' | 'files' | 'search' | 'projects';
 
 function viewFromPageParam(): ViewState {
   const page = getParam('page');
@@ -18,6 +19,7 @@ function viewFromPageParam(): ViewState {
   if (page === 'claude') return 'claude';
   if (page === 'files') return 'files';
   if (page === 'search') return 'search';
+  if (page === 'projects') return 'projects';
   return 'dashboard';
 }
 
@@ -97,6 +99,16 @@ function App() {
       />
     );
   }
+  if (view === 'projects') {
+    return (
+      <ProjectsPage
+        onBack={() => {
+          setParams({ page: null });
+          setView('dashboard');
+        }}
+      />
+    );
+  }
 
   return (
     <Dashboard
@@ -117,6 +129,10 @@ function App() {
       onOpenSearch={() => {
         setParams({ page: 'search' });
         setView('search');
+      }}
+      onOpenProjects={() => {
+        setParams({ page: 'projects' });
+        setView('projects');
       }}
     />
   );
