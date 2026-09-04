@@ -30,7 +30,7 @@ func NewPublisher(ctx context.Context, nc *nats.Conn, subject string) (*Publishe
 
 	_, err = js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:     "MEMORY_WRITE",
-		Subjects: []string{"soulman.memory.write", "soulman.dev.memory.write"},
+		Subjects: []string{"soulman.memory.write"},
 		MaxAge:   30 * 24 * time.Hour,
 	})
 	if err != nil {

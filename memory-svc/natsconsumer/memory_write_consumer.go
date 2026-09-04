@@ -72,7 +72,7 @@ func NewMemoryWriteConsumer(natsURL, consumerName, subject string, w EpisodeWrit
 func (c *MemoryWriteConsumer) Start(ctx context.Context) error {
 	_, err := c.js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:     "MEMORY_WRITE",
-		Subjects: []string{"soulman.memory.write", "soulman.dev.memory.write"},
+		Subjects: []string{"soulman.memory.write"},
 		MaxAge:   30 * 24 * time.Hour,
 	})
 	if err != nil {

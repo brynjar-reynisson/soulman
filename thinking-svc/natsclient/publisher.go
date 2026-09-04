@@ -40,7 +40,7 @@ func NewPublisher(ctx context.Context, natsURL, subject string) (*Publisher, err
 
 	_, err = js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:     "THINKING_REQUEST",
-		Subjects: []string{"soulman.thinking.request", "soulman.dev.thinking.request"},
+		Subjects: []string{"soulman.thinking.request"},
 		MaxAge:   30 * 24 * time.Hour,
 	})
 	if err != nil {

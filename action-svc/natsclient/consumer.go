@@ -51,7 +51,7 @@ func NewConsumer(nc *nats.Conn, consumerName, subject string, h Handler) (*Consu
 func (c *Consumer) Start(ctx context.Context) error {
 	stream, err := c.js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:     "THINKING_REQUEST",
-		Subjects: []string{"soulman.thinking.request", "soulman.dev.thinking.request"},
+		Subjects: []string{"soulman.thinking.request"},
 		MaxAge:   30 * 24 * time.Hour,
 	})
 	if err != nil {
