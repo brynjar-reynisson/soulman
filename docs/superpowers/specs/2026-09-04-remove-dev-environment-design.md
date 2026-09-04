@@ -40,6 +40,7 @@ Delete `config/dev.json`. No changes to `config/prod.json`.
 | `memory-svc/config/config.go` | `env("SCHEMA", "memory_dev")` → `env("SCHEMA", "memory_prod")` |
 | `projects-svc/config/config.go` | `env("SCHEMA", "projects_dev")` → `env("SCHEMA", "projects_prod")` |
 | `action-svc/config/config.go` | `env("SOULMAN_ROOT", `C:\Users\Lenovo\soulman-dev`)` → `env("SOULMAN_ROOT", `C:\Users\Lenovo\soulman-prod`)` |
+| `web-svc/config/config.go` | `env("SOULMAN_ROOT", `C:\Users\Lenovo\soulman-dev`)` → `env("SOULMAN_ROOT", `C:\Users\Lenovo\soulman-prod`)` (found during plan-writing — `soulman-prod\run-web-svc.ps1` carries the exact same override-the-dev-default footgun as `action-svc`'s) |
 
 Update the corresponding `config_test.go` assertions in each package where they hardcode the old default (default-value tests only — tests that merely use a `-dev`-suffixed string as arbitrary example fixture data for parsing, unrelated to which default the code falls back to, are left alone).
 
@@ -53,6 +54,8 @@ Update the corresponding `config_test.go` assertions in each package where they 
 | `memory-svc/natsconsumer/memory_write_consumer.go` | `MEMORY_WRITE` |
 
 The `STIMULUS` stream is provisioned by hand via the `nats` CLI, not in Go code — its subject list gets the same cleanup via `nats stream edit STIMULUS --subjects soulman.stimulus.raw` (or equivalent), run once against the shared local NATS server.
+
+**`cli` module's `--dev` flag** (found during plan-writing — not just a doc mention, a real functional flag): the `soulman` CLI's `parseArgs` accepts `--dev`, which switches its target from `http://localhost:9001` to `http://localhost:9011`. This flag, its `parsedArgs.Dev` field, `cli/main.go`'s `devURL` constant and selection logic, and the corresponding test coverage in `cli/args_test.go` are all removed — the CLI now always targets `http://localhost:9001`. `cli/schoolbackfill.go`'s doc comment and `cli/NOTES.md`'s description of the `--dev` flag are updated to match.
 
 **Doc-comment cleanup in code** — `common/sharedconfig/config.go`'s package doc and the `GmailConfig`/`SchoolConfig` comments describing "both dev and prod populate this," and `perception-svc/config/config.go`'s comment referencing `soulman-dev`/`soulman-prod` launchers, get reworded to describe the single environment.
 
@@ -115,8 +118,8 @@ After this change, each of those three defaults is corrected at the source, and 
 
 ## Verification
 
-1. **Build check**: `go build ./...` succeeds in each of `memory-svc`, `perception-svc`, `thinking-svc`, `action-svc`, `projects-svc`, `common`, `cli` after the code changes.
-2. **Unit tests**: existing test suites pass, including the updated default-value assertions in `memory-svc/config`, `projects-svc/config`, and `action-svc/config`.
+1. **Build check**: `go build ./...` succeeds in each of `memory-svc`, `perception-svc`, `thinking-svc`, `action-svc`, `web-svc`, `projects-svc`, `common`, `cli` after the code changes.
+2. **Unit tests**: existing test suites pass, including the updated default-value assertions in `memory-svc/config`, `projects-svc/config`, `action-svc/config`, and `web-svc/config`, and the removed `--dev`-flag assertions in `cli/args_test.go`.
 3. **Config load**: `soulman-prod`'s `run-<svc>.ps1` scripts still start every service successfully with no `SCHEMA`/`SOULMAN_ROOT` override present — confirms the new defaults are correct on their own.
 4. **NATS**: confirm via `nats stream info STIMULUS` / `THINKING_REQUEST` / `MEMORY_WRITE` that no `soulman.dev.*` subject remains in any stream's subject list, and that prod traffic still flows end-to-end (a real stimulus reaches memory-svc, thinking-svc, and action-svc as before).
 5. **`start-everything.ps1`**: dry-read confirms it now launches only `soulman-prod`'s six services (`memory-svc`, `perception-svc`, `thinking-svc`, `action-svc`, `web-svc`, `web`) with no `soulman-dev` counterpart.
