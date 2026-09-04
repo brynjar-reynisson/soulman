@@ -1,6 +1,6 @@
 # One-time setup: pre-creates Windows Firewall inbound-allow rules for every
-# Soulman service executable (dev + prod) so Windows never has to prompt for
-# them again after a rebuild+restart.
+# Soulman service executable so Windows never has to prompt for them again
+# after a rebuild+restart.
 #
 # Why this works: each run-<svc>.ps1 does `go build -o $exe .`, which
 # overwrites the binary in place at the same fixed path every time. Windows
@@ -20,7 +20,6 @@ $ErrorActionPreference = "Stop"
 $services = @("perception-svc", "memory-svc", "thinking-svc", "action-svc", "web-svc")
 
 $envs = @(
-    @{ Label = "dev";  Root = "C:\Users\Lenovo\soulman-dev" },
     @{ Label = "prod"; Root = "C:\Users\Lenovo\soulman-prod" }
 )
 
