@@ -93,6 +93,33 @@ func TestAPIProjects_DeleteForwardsURLParam(t *testing.T) {
 	}
 }
 
+func TestAPIProjects_DeleteEscapesSpecialCharactersInName(t *testing.T) {
+	var gotMethod, gotPath string
+	projectsSvc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Use EscapedPath (not r.URL.Path, which decodes %23 back to '#')
+		// so this asserts what was literally sent over the wire.
+		gotMethod, gotPath = r.Method, r.URL.EscapedPath()
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer projectsSvc.Close()
+
+	cfg := httpserver.Config{CORSAllowedOrigin: "http://localhost:5178", ProjectsSvcURL: projectsSvc.URL}
+	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
+	srv := httpserver.New("9005", cfg, verifier)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/projects/projects/a%23b", nil)
+	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204, body=%s", rec.Code, rec.Body.String())
+	}
+	if gotMethod != http.MethodDelete || gotPath != "/projects/a%23b" {
+		t.Errorf("proxied request = %s %s, want DELETE /projects/a%%23b", gotMethod, gotPath)
+	}
+}
+
 func TestAPIProjects_ProjectsSvcDown_Returns502(t *testing.T) {
 	projectsSvc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

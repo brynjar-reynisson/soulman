@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -66,6 +67,7 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
 	projects, err := s.store.ListProjects(r.Context())
 	if err != nil {
+		slog.Error("projects: list projects failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -83,6 +85,7 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusConflict, "project already exists")
 			return
 		}
+		slog.Error("projects: create project failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -103,6 +106,7 @@ func (s *Server) updateProject(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "project not found")
 			return
 		}
+		slog.Error("projects: update project failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -120,6 +124,7 @@ func (s *Server) deleteProject(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "project not found")
 			return
 		}
+		slog.Error("projects: delete project failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -129,6 +134,7 @@ func (s *Server) deleteProject(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listPrompts(w http.ResponseWriter, r *http.Request) {
 	prompts, err := s.store.ListPrompts(r.Context())
 	if err != nil {
+		slog.Error("projects: list prompts failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -152,12 +158,19 @@ func (s *Server) createPrompt(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "project not found")
 			return
 		}
+		slog.Error("projects: create prompt failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusCreated, prompt)
 	if s.dispatcher != nil {
-		s.dispatcher.TryDispatchNext(r.Context())
+		// Dispatch off context.Background(), not r.Context(): if the
+		// client disconnects or a proxy timeout fires between a
+		// successful launch and MarkCreatingSpec inside
+		// TryDispatchNext, a canceled r.Context() could leave the row
+		// NOT_STARTED while a real claude process is already running,
+		// risking a duplicate launch on the next dispatch trigger.
+		go dispatchNextSafely(s.dispatcher)
 	}
 }
 
@@ -180,10 +193,23 @@ func (s *Server) updatePromptState(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "prompt not found")
 			return
 		}
+		slog.Error("projects: update prompt state failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+	if s.dispatcher != nil {
+		// A manual state edit back to NOT_STARTED is the documented
+		// way to unstick a permanently-stuck CREATING_SPEC prompt —
+		// trigger a dispatch attempt so that recovery path actually
+		// frees the slot immediately, not just whenever some other
+		// prompt happens to get created or notify next.
+		// TryDispatchNext is a no-op unless something is NOT_STARTED
+		// and nothing is CREATING_SPEC, so calling it after every
+		// successful state PUT (including ones that don't logically
+		// need it) is harmless.
+		go dispatchNextSafely(s.dispatcher)
+	}
 }
 
 func validState(s string) bool {

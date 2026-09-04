@@ -39,9 +39,20 @@ func main() {
 	mainSrv := httpserver.New(st, dispatcher)
 	notifySrv := httpserver.NewNotifyServer(st, dispatcher)
 
+	// Bound to 127.0.0.1, not "0.0.0.0": this listener's only client is
+	// web-svc, always on the same host in this repo's current
+	// deployment model (see common/sharedconfig's WebConfig.ProjectsSvcURL
+	// values in config/dev.json / config/prod.json, both
+	// http://localhost:...). Unlike the notify listener below, a bind
+	// failure here is fatal — nothing else can serve the API without it.
+	mainListener, err := net.Listen("tcp", "127.0.0.1:"+cfg.HTTPPort)
+	if err != nil {
+		slog.Error("main http listener bind failed", "error", err)
+		os.Exit(1)
+	}
 	go func() {
 		slog.Info("projects-svc main http listening", "port", cfg.HTTPPort)
-		if err := http.ListenAndServe(":"+cfg.HTTPPort, mainSrv.Handler()); err != nil {
+		if err := http.Serve(mainListener, mainSrv.Handler()); err != nil {
 			slog.Error("main http server failed", "error", err)
 		}
 	}()

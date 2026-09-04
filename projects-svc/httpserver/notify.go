@@ -55,6 +55,7 @@ func notifyHandler(st NotifyStore, d *dispatch.Dispatcher) http.HandlerFunc {
 				writeError(w, http.StatusNotFound, "prompt not found")
 				return
 			}
+			slog.Error("projects: notify update prompt state failed", "error", err)
 			writeError(w, http.StatusInternalServerError, "internal error")
 			return
 		}

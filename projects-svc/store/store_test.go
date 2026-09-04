@@ -10,6 +10,17 @@ import (
 	"soulman/projects-svc/store"
 )
 
+// testSchema is a dedicated schema for these tests, separate from
+// projects_dev (the real dev deployment's schema). Several tests below
+// assert global conditions (no other CREATING_SPEC prompt exists anywhere,
+// a freshly created prompt is the oldest NOT_STARTED row anywhere, etc.)
+// that would start failing the moment real dev data exists if this ran
+// against projects_dev. Apply the DDL to this schema before running these
+// tests locally:
+//
+//	psql "postgres://postgres:postgres@localhost:54322/postgres" -v schema=projects_test -f docs/superpowers/specs/sql/2026-09-04-projects-tables.sql
+const testSchema = "projects_test"
+
 func testStore(t *testing.T) *store.Store {
 	t.Helper()
 	dbURL := os.Getenv("DATABASE_URL")
@@ -17,7 +28,7 @@ func testStore(t *testing.T) *store.Store {
 		dbURL = "postgres://postgres:postgres@localhost:54322/postgres"
 	}
 	ctx := context.Background()
-	s, err := store.New(ctx, dbURL, "projects_dev")
+	s, err := store.New(ctx, dbURL, testSchema)
 	if err != nil {
 		t.Skipf("postgres not available (%v) — set DATABASE_URL to run DB tests", err)
 	}
@@ -31,8 +42,8 @@ func uniqueName(prefix string) string {
 
 func cleanupProject(t *testing.T, s *store.Store, name string) {
 	t.Cleanup(func() {
-		s.ExecCleanup(context.Background(), "DELETE FROM projects_dev.prompt WHERE project_name = $1", name)
-		s.ExecCleanup(context.Background(), "DELETE FROM projects_dev.project WHERE name = $1", name)
+		s.ExecCleanup(context.Background(), "DELETE FROM "+testSchema+".prompt WHERE project_name = $1", name)
+		s.ExecCleanup(context.Background(), "DELETE FROM "+testSchema+".project WHERE name = $1", name)
 	})
 }
 

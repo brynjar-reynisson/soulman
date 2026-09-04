@@ -13,6 +13,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -54,7 +55,9 @@ func (s *Server) proxyProjects(upstreamPath func(r *http.Request) string) http.H
 	}
 }
 
-func projectsPath(r *http.Request) string    { return "/projects" }
-func projectByName(r *http.Request) string   { return "/projects/" + chi.URLParam(r, "name") }
-func promptsPath(r *http.Request) string     { return "/prompts" }
-func promptByID(r *http.Request) string      { return "/prompts/" + chi.URLParam(r, "id") }
+func projectsPath(r *http.Request) string { return "/projects" }
+func projectByName(r *http.Request) string {
+	return "/projects/" + url.PathEscape(chi.URLParam(r, "name"))
+}
+func promptsPath(r *http.Request) string { return "/prompts" }
+func promptByID(r *http.Request) string  { return "/prompts/" + chi.URLParam(r, "id") }

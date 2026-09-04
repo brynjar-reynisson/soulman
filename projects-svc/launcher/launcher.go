@@ -60,7 +60,7 @@ func Launch(project Project, prompt Prompt, notifyPort string) error {
 func directive(promptID int64, notifyPort string) string {
 	notify := func(state string) string {
 		return fmt.Sprintf(
-			`curl -s -X POST http://localhost:%s/notify -H "Content-Type: application/json" -d '{"prompt_id": %d, "state": "%s"}'`,
+			`curl -s -X POST http://127.0.0.1:%s/notify -H "Content-Type: application/json" -d '{"prompt_id": %d, "state": "%s"}'`,
 			notifyPort, promptID, state)
 	}
 	return fmt.Sprintf(
