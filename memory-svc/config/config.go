@@ -47,7 +47,7 @@ func Load() (*Config, error) {
 		DatabaseURL:          env("DATABASE_URL", "postgres://postgres:postgres@localhost:54322/postgres"),
 		HTTPPort:             env("HTTP_PORT", "9002"),
 		LogDir:               env("LOG_DIR", "./logs"),
-		Schema:               env("SCHEMA", "memory_dev"),
+		Schema:               env("SCHEMA", "memory_prod"),
 		StimulusSubject:      shared.StimulusSubject,
 		ConsumerName:         shared.ConsumerNames.MemorySvc,
 		MemoryWriteSubject:   shared.MemoryWriteSubject,

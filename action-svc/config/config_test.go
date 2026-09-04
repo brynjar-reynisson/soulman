@@ -72,8 +72,8 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.HTTPPort != "9004" {
 		t.Errorf("HTTPPort = %q, want 9004", cfg.HTTPPort)
 	}
-	if cfg.SoulmanRoot != `C:\Users\Lenovo\soulman-dev` {
-		t.Errorf("SoulmanRoot = %q, want C:\\Users\\Lenovo\\soulman-dev", cfg.SoulmanRoot)
+	if cfg.SoulmanRoot != `C:\Users\Lenovo\soulman-prod` {
+		t.Errorf("SoulmanRoot = %q, want C:\\Users\\Lenovo\\soulman-prod", cfg.SoulmanRoot)
 	}
 	if cfg.ReportSendTime != "10:00" {
 		t.Errorf("ReportSendTime = %q, want 10:00", cfg.ReportSendTime)

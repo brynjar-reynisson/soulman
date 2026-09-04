@@ -16,7 +16,7 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		DatabaseURL: env("DATABASE_URL", "postgres://postgres:postgres@localhost:54322/postgres"),
-		Schema:      env("SCHEMA", "projects_dev"),
+		Schema:      env("SCHEMA", "projects_prod"),
 		HTTPPort:    env("HTTP_PORT", "9006"),
 		NotifyPort:  env("NOTIFY_PORT", "9007"),
 	}

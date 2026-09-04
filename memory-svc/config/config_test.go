@@ -67,8 +67,8 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.HTTPPort != "9002" {
 		t.Errorf("HTTPPort = %q, want 9002", cfg.HTTPPort)
 	}
-	if cfg.Schema != "memory_dev" {
-		t.Errorf("Schema = %q, want memory_dev", cfg.Schema)
+	if cfg.Schema != "memory_prod" {
+		t.Errorf("Schema = %q, want memory_prod", cfg.Schema)
 	}
 	if cfg.StimulusSubject != "soulman.stimulus.raw" {
 		t.Errorf("StimulusSubject = %q, want soulman.stimulus.raw", cfg.StimulusSubject)

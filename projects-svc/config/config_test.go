@@ -18,8 +18,8 @@ func TestLoad_DefaultsWhenEnvUnset(t *testing.T) {
 	if cfg.DatabaseURL != "postgres://postgres:postgres@localhost:54322/postgres" {
 		t.Errorf("DatabaseURL = %q, want the default local Postgres URL", cfg.DatabaseURL)
 	}
-	if cfg.Schema != "projects_dev" {
-		t.Errorf("Schema = %q, want projects_dev", cfg.Schema)
+	if cfg.Schema != "projects_prod" {
+		t.Errorf("Schema = %q, want projects_prod", cfg.Schema)
 	}
 	if cfg.HTTPPort != "9006" {
 		t.Errorf("HTTPPort = %q, want 9006", cfg.HTTPPort)

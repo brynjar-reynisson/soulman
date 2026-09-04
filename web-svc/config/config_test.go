@@ -177,7 +177,7 @@ func TestLoad_PopulatesDownstreamURLsAndCORSOrigin(t *testing.T) {
 	}
 }
 
-func TestLoad_SoulmanRootDefaultsToDevPath(t *testing.T) {
+func TestLoad_SoulmanRootDefaultsToProdPath(t *testing.T) {
 	dir := t.TempDir()
 	path := writeConfigFile(t, dir, validConfigJSON)
 	os.Setenv("CONFIG_PATH", path)
@@ -192,7 +192,7 @@ func TestLoad_SoulmanRootDefaultsToDevPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.SoulmanRoot != `C:\Users\Lenovo\soulman-dev` {
+	if cfg.SoulmanRoot != `C:\Users\Lenovo\soulman-prod` {
 		t.Errorf("SoulmanRoot = %q", cfg.SoulmanRoot)
 	}
 }

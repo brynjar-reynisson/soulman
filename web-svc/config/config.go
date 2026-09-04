@@ -93,7 +93,7 @@ func Load() (*Config, error) {
 		ThinkingSvcURL:     shared.Web.ThinkingSvcURL,
 		ActionSvcURL:       shared.Web.ActionSvcURL,
 		ProjectsSvcURL:     shared.Web.ProjectsSvcURL,
-		SoulmanRoot:        env("SOULMAN_ROOT", `C:\Users\Lenovo\soulman-dev`),
+		SoulmanRoot:        env("SOULMAN_ROOT", `C:\Users\Lenovo\soulman-prod`),
 		ObsidianRoot:       shared.Web.ObsidianRoot,
 		ClaudeProjectRoots: shared.Web.ClaudeProjectRoots,
 		FileBrowserRoots:   shared.Web.FileBrowserRoots,

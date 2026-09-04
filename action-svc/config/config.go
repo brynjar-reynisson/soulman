@@ -54,7 +54,7 @@ func Load() (*Config, error) {
 	return &Config{
 		NATSURL:                shared.NATSURL,
 		HTTPPort:               env("HTTP_PORT", "9004"),
-		SoulmanRoot:            env("SOULMAN_ROOT", `C:\Users\Lenovo\soulman-dev`),
+		SoulmanRoot:            env("SOULMAN_ROOT", `C:\Users\Lenovo\soulman-prod`),
 		ReportSendTime:         env("REPORT_SEND_TIME", "10:00"),
 		ReportNotifier:         env("REPORT_NOTIFIER", "discord"),
 		DiscordBotToken:        env("DISCORD_BOT_TOKEN", ""),
