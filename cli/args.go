@@ -10,7 +10,6 @@ type parsedArgs struct {
 	Text                 string
 	Mode                 string
 	Priority             string
-	Dev                  bool
 	InjectFile           string
 	DiscordHistoryLimit  int
 	SchoolBackfillSince  string
@@ -23,7 +22,7 @@ var validPriorities = map[string]bool{"low": true, "normal": true, "high": true,
 //
 //	soulman "<text>"                      -> Mode: stimulus
 //	soulman note "<text>"                  -> Mode: note
-//	soulman [--priority P] [--dev] ...     -> flags may appear anywhere
+//	soulman [--priority P] ...             -> flags may appear anywhere
 //
 // A hand-rolled parser (not the stdlib flag package) because flag doesn't
 // cleanly support flags interleaved with a "note" subcommand followed by
@@ -40,8 +39,6 @@ func parseArgs(args []string) (parsedArgs, error) {
 			continue
 		}
 		switch {
-		case !endOfFlags && a == "--dev":
-			res.Dev = true
 		case !endOfFlags && a == "--priority":
 			if i+1 >= len(args) {
 				return parsedArgs{}, fmt.Errorf("--priority requires a value")
@@ -93,7 +90,7 @@ func parseArgs(args []string) (parsedArgs, error) {
 	}
 
 	if len(positional) == 0 {
-		return parsedArgs{}, fmt.Errorf(`usage: soulman [--dev] [--priority low|normal|high|critical] [note] "<text>"`)
+		return parsedArgs{}, fmt.Errorf(`usage: soulman [--priority low|normal|high|critical] [note] "<text>"`)
 	}
 
 	if positional[0] == "inject" {

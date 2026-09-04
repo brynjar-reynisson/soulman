@@ -8,21 +8,13 @@ import (
 	"soulman/cli/client"
 )
 
-const (
-	prodURL = "http://localhost:9001"
-	devURL  = "http://localhost:9011"
-)
+const baseURL = "http://localhost:9001"
 
 func main() {
 	args, err := parseArgs(os.Args[1:])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
-	}
-
-	baseURL := prodURL
-	if args.Dev {
-		baseURL = devURL
 	}
 
 	if args.Mode == "discord-history" {

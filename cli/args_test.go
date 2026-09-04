@@ -16,9 +16,6 @@ func TestParseArgs_PlainText_DefaultsToStimulusMode(t *testing.T) {
 	if got.Priority != "normal" {
 		t.Errorf("Priority = %q, want normal (default)", got.Priority)
 	}
-	if got.Dev {
-		t.Error("Dev = true, want false (default)")
-	}
 }
 
 func TestParseArgs_NoteSubcommand_SetsNoteMode(t *testing.T) {
@@ -44,16 +41,6 @@ func TestParseArgs_PriorityFlag(t *testing.T) {
 	}
 	if got.Mode != "note" || got.Text != "server is on fire" {
 		t.Errorf("Mode/Text = %q/%q, want note/'server is on fire'", got.Mode, got.Text)
-	}
-}
-
-func TestParseArgs_DevFlag(t *testing.T) {
-	got, err := parseArgs([]string{"--dev", "hello"})
-	if err != nil {
-		t.Fatalf("parseArgs: %v", err)
-	}
-	if !got.Dev {
-		t.Error("Dev = false, want true")
 	}
 }
 
@@ -132,16 +119,6 @@ func TestParseArgs_InjectMode(t *testing.T) {
 	}
 	if got.InjectFile != "path/to/file.json" {
 		t.Errorf("InjectFile = %q, want path/to/file.json", got.InjectFile)
-	}
-}
-
-func TestParseArgs_InjectMode_WithDevFlag(t *testing.T) {
-	got, err := parseArgs([]string{"--dev", "inject", "path/to/file.json"})
-	if err != nil {
-		t.Fatalf("parseArgs: %v", err)
-	}
-	if got.Mode != "inject" || got.InjectFile != "path/to/file.json" || !got.Dev {
-		t.Errorf("got %+v, want Mode=inject InjectFile=path/to/file.json Dev=true", got)
 	}
 }
 

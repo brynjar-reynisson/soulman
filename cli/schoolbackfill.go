@@ -20,7 +20,7 @@ import (
 )
 
 // runSchoolBackfill implements `soulman school-backfill --since YYYY-MM-DD
-// [--dry-run] [--dev]`: a one-off historical scan of @reykjavik.is mail,
+// [--dry-run]`: a one-off historical scan of @reykjavik.is mail,
 // feeding each match through perception-svc's existing debug-injection
 // endpoint (POST /api/perceive/raw) — reusing the live pipeline rather
 // than building special-case backfill logic. See
