@@ -34,15 +34,15 @@ There is still no correction/feedback loop for miscalibrated verdicts — descri
 
 Unlike `SystemMonitorRule` (`warning` is not important) or `GmailTriageRule` (DeepSeek judges), `LogErrorRule` always sets `Important: true` — there's no lower tier to distinguish because `logmonitor` only ever publishes `channel: "log-error"` stimuli for `ERROR`-level lines in the first place (`WARN`/`INFO` never reach thinking-svc at all, filtered at the source in `perception-svc/logmonitor`). See `docs/superpowers/specs/2026-07-27-log-error-perception-design.md`.
 
-## School Email rule: prod-only gating and date resolution (added 2026-09-03)
+## School Email rule: config-gated and date resolution (added 2026-09-03)
 
-`SchoolEmailRule` matches Gmail senders ending in a configured domain (case-insensitive, default `@reykjavik.is`). It's inserted ahead of the generic `GmailTriageRule` in the rule registry so school emails branch off before importance-triage logic fires. **The rule is prod-only**: `main.go` conditionally prepends it to `rules.Registry` only if `school.enabled` is true in the config AND `school.sender_domains` is non-empty — the registry itself has no built-in per-environment concept, so environment-specific gating must happen at registration time.
+`SchoolEmailRule` matches Gmail senders ending in a configured domain (case-insensitive, default `@reykjavik.is`). It's inserted ahead of the generic `GmailTriageRule` in the rule registry so school emails branch off before importance-triage logic fires. **The rule is config-gated**: `main.go` conditionally prepends it to `rules.Registry` only if `school.enabled` is true in the config AND `school.sender_domains` is non-empty — the registry itself has no built-in conditional-registration concept of its own, so this gating happens at registration time in `main.go`.
 
 The `ExtractSchoolEvents` DeepSeek prompt resolves relative dates and times (e.g. "next Tuesday 10am") against the email's own `received_at` / `OccurredAt` timestamp, not against real "now" — **this is critical for correctness when backfilling historical mail** (see `cli/NOTES.md` for the `school-backfill` tool). A stimulus for an email dated August 15th that says "next Tuesday" should resolve to a date relative to August 15th, not relative to today. If this logic ever changes to use `time.Now()` instead, backfill will break silently, producing incorrect future dates for historical events.
 
 ## Test suites were polluting live NATS (incident, 2026-09-03)
 
-`natsclient/consumer_test.go` and `natsclient/publisher_test.go` connected to the real shared dev/prod NATS server by default and published test payloads onto the real `soulman.stimulus.raw`/`soulman.thinking.request` subjects — a routine `go test ./...` produced real Discord noise and log errors in prod. Every live-NATS test in this package now requires `SOULMAN_NATS_INTEGRATION_TESTS=1` to run (skipped otherwise). Full incident writeup and root cause: `perception-svc/NOTES.md`.
+`natsclient/consumer_test.go` and `natsclient/publisher_test.go` connected to the real shared NATS server by default and published test payloads onto the real `soulman.stimulus.raw`/`soulman.thinking.request` subjects — a routine `go test ./...` produced real Discord noise and log errors. Every live-NATS test in this package now requires `SOULMAN_NATS_INTEGRATION_TESTS=1` to run (skipped otherwise). Full incident writeup and root cause: `perception-svc/NOTES.md`.
 
 ## Leveled logging (log/slog, added 2026-07-27)
 
