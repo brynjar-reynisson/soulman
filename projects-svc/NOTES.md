@@ -4,17 +4,17 @@ Incidents, gotchas, and decisions learned building/reviewing this service — no
 
 ## Two HTTP listeners, both loopback-only
 
-`HTTP_PORT` (default `9006`) is the main CRUD API — `web-svc` is its only client, always on the same host in this repo's current single-machine deployment model (confirmed via `common/sharedconfig`'s `WebConfig.ProjectsSvcURL`, `http://localhost:...` in both `config/dev.json` and `config/prod.json`). `NOTIFY_PORT` (default `9007`) is the callback listener spawned Claude sessions curl into.
+`HTTP_PORT` (default `9006`) is the main CRUD API — `web-svc` is its only client, always on the same host in this repo's current single-machine deployment model (confirmed via `common/sharedconfig`'s `WebConfig.ProjectsSvcURL`, `http://localhost:...` in `config/prod.json`). `NOTIFY_PORT` (default `9007`) is the callback listener spawned Claude sessions curl into.
 
 Both bind to `127.0.0.1` only, not `0.0.0.0` (`projects-svc/main.go`). The notify listener always did; the main listener was fixed to match during final review — unlike the other Soulman services, this one accepts a filesystem path plus free-form prompt text that gets handed straight to `exec.Command` (`launcher.Launch`), making it a much higher-value target if it were ever reachable off-host. A bind failure on the main listener is fatal (`slog.Error` + `os.Exit(1)`) since nothing else can serve the API without it; the notify listener's bind failure is logged but non-fatal, since the main CRUD API still works without it (a session just can't report `IMPLEMENTING`/`DONE` until the process is restarted with a free port).
 
 ## `SCHEMA` must be set explicitly per environment
 
-`config.Load()` defaults `SCHEMA` to `projects_dev` (mirrors `memory-svc`'s convention). An omitted override in prod's `run-projects-svc.ps1` would silently make prod write into the dev schema — there is no cross-check that catches this. Always confirm `SCHEMA=projects_prod` is actually set in prod's launcher before trusting prod data.
+`config.Load()` defaults `SCHEMA` to `projects_prod` (mirrors `memory-svc`'s convention, and matches this repo's single-environment deployment — no override is needed in `run-projects-svc.ps1`).
 
-## Store tests use a separate `projects_test` schema, not `projects_dev`
+## Store tests use a separate `projects_test` schema, not `projects_prod`
 
-`projects-svc/store/store_test.go`'s `testStore(t)` connects to a dedicated `projects_test` schema (same `DATABASE_URL` default as `projects_dev`/`projects_prod`, same Postgres instance). This was a final-review fix: several tests assert *global* conditions (no other `CREATING_SPEC` prompt exists anywhere, the prompt just created is the oldest `NOT_STARTED` row anywhere, no `NOT_STARTED` row exists anywhere) that would start failing the moment real dev data exists, if they ran against `projects_dev`.
+`projects-svc/store/store_test.go`'s `testStore(t)` connects to a dedicated `projects_test` schema (same `DATABASE_URL` default as `projects_prod`, same Postgres instance). This was a final-review fix: several tests assert *global* conditions (no other `CREATING_SPEC` prompt exists anywhere, the prompt just created is the oldest `NOT_STARTED` row anywhere, no `NOT_STARTED` row exists anywhere) that would start failing the moment real prod data exists, if they ran against `projects_prod`.
 
 Before running `go test ./store/...` locally, apply the DDL to `projects_test` too — it isn't created automatically:
 
@@ -30,7 +30,7 @@ Its only protection is the loopback bind on `NOTIFY_PORT` plus a `RemoteAddr` ch
 
 ## Deployment is out of scope for this repo
 
-`run-projects-svc.ps1` (in both `soulman-dev\` and `soulman-prod\`), applying the DDL against real `projects_dev`/`projects_prod` schemas, and wiring `start-everything.ps1`/`setup-firewall-rules.ps1` for the two new ports are **not** part of this git repo and were explicitly out of scope for `docs/superpowers/plans/2026-09-04-projects-tool.md` — that work happens by hand, after this branch merges, the same way every other service's initial deployment was bootstrapped.
+`run-projects-svc.ps1` (in `soulman-prod\`), applying the DDL against the real `projects_prod` schema, and wiring `start-everything.ps1`/`setup-firewall-rules.ps1` for the two new ports are **not** part of this git repo and were explicitly out of scope for `docs/superpowers/plans/2026-09-04-projects-tool.md` — that work happens by hand, after this branch merges, the same way every other service's initial deployment was bootstrapped.
 
 ## Known follow-up: no frontend test coverage
 

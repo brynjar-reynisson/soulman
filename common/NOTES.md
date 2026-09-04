@@ -11,7 +11,7 @@
 Added incrementally, each behind its own spec/plan:
 
 1. `watch_paths` — perception-svc's folder-watcher paths (first field, replacing a `WATCH_PATHS` env var).
-2. `nats_url`, `stimulus_subject`, `thinking_request_subject`, `memory_write_subject`, `consumer_names` (`memory_svc`, `thinking_svc`, later `action_svc`) — moved dev/prod NATS wiring out of per-service env vars into one git-tracked place.
+2. `nats_url`, `stimulus_subject`, `thinking_request_subject`, `memory_write_subject`, `consumer_names` (`memory_svc`, `thinking_svc`, later `action_svc`) — moved NATS wiring out of per-service env vars into one git-tracked place.
 3. `gmail` (`query`, `seen_label`, `poll_interval_seconds`) — perception-svc's Gmail channel.
 
-Pattern for adding a new field: extend the `Config`/nested struct here, add fatal-fast validation matching the existing style (empty string / non-positive int → startup error), add it to both `config/dev.json` and `config/prod.json`, and extend `common/sharedconfig`'s tests for both the populated and zero-value cases.
+Pattern for adding a new field: extend the `Config`/nested struct here, add fatal-fast validation matching the existing style (empty string / non-positive int → startup error), add it to `config/prod.json`, and extend `common/sharedconfig`'s tests for both the populated and zero-value cases.
