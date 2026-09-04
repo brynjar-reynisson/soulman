@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { getAccessToken } from '../auth';
-import { getProjects, createProject, deleteProject, ApiError, type Project } from '../api';
+import { getProjects, createProject, updateProject, deleteProject, ApiError, type Project } from '../api';
 
 export function ProjectsPanel() {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [path, setPath] = useState('');
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [editPath, setEditPath] = useState('');
 
   async function refresh() {
     const token = await getAccessToken();
@@ -50,6 +52,29 @@ export function ProjectsPanel() {
     }
   }
 
+  function startEdit(p: Project) {
+    setEditingName(p.name);
+    setEditPath(p.path);
+  }
+
+  function cancelEdit() {
+    setEditingName(null);
+    setEditPath('');
+  }
+
+  async function handleSaveEdit(projectName: string) {
+    if (!editPath) return;
+    const token = await getAccessToken();
+    try {
+      await updateProject(token, projectName, editPath);
+      setEditingName(null);
+      setEditPath('');
+      await refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to update project');
+    }
+  }
+
   return (
     <div className="rounded border border-gray-200 bg-white p-4">
       <h2 className="mb-3 text-lg font-semibold">Projects</h2>
@@ -68,11 +93,40 @@ export function ProjectsPanel() {
             {projects.map((p) => (
               <tr key={p.name} className="border-t border-gray-100">
                 <td className="py-1 font-medium">{p.name}</td>
-                <td className="py-1 text-gray-600">{p.path}</td>
-                <td className="py-1 text-right">
-                  <button onClick={() => handleDelete(p.name)} className="text-xs text-red-600 underline">
-                    Delete
-                  </button>
+                <td className="py-1 text-gray-600">
+                  {editingName === p.name ? (
+                    <input
+                      value={editPath}
+                      onChange={(e) => setEditPath(e.target.value)}
+                      className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                    />
+                  ) : (
+                    p.path
+                  )}
+                </td>
+                <td className="py-1 text-right whitespace-nowrap">
+                  {editingName === p.name ? (
+                    <>
+                      <button
+                        onClick={() => handleSaveEdit(p.name)}
+                        className="text-xs text-gray-500 underline"
+                      >
+                        Save
+                      </button>{' '}
+                      <button onClick={cancelEdit} className="text-xs text-gray-500 underline">
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => startEdit(p)} className="text-xs text-gray-500 underline">
+                        Edit
+                      </button>{' '}
+                      <button onClick={() => handleDelete(p.name)} className="text-xs text-red-600 underline">
+                        Delete
+                      </button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}
