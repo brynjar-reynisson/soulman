@@ -24,8 +24,13 @@ export function PromptsPanel() {
     const token = await getAccessToken();
     try {
       const [promptData, projectData] = await Promise.all([getPrompts(token), getProjects(token)]);
-      setPrompts(promptData);
-      setProjects(projectData);
+      // Defense in depth: normalize a null/undefined API response to an
+      // empty array. The real bug (Go's ListProjects/ListPrompts returning
+      // a nil slice, which encoding/json marshals as `null` rather than
+      // `[]`) is fixed server-side, but an unguarded `.map()` on `null`
+      // here would still crash the whole page if that regressed.
+      setPrompts(promptData ?? []);
+      setProjects(projectData ?? []);
       setError(null);
     } catch {
       setError('Prompts unavailable');

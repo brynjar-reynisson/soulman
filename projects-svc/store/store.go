@@ -71,7 +71,7 @@ func (s *Store) ListProjects(ctx context.Context) ([]Project, error) {
 		return nil, fmt.Errorf("store: list projects: %w", err)
 	}
 	defer rows.Close()
-	var out []Project
+	out := []Project{}
 	for rows.Next() {
 		var p Project
 		if err := rows.Scan(&p.Name, &p.Path); err != nil {
@@ -143,7 +143,7 @@ func (s *Store) ListPrompts(ctx context.Context) ([]Prompt, error) {
 		return nil, fmt.Errorf("store: list prompts: %w", err)
 	}
 	defer rows.Close()
-	var out []Prompt
+	out := []Prompt{}
 	for rows.Next() {
 		var p Prompt
 		if err := rows.Scan(&p.ID, &p.ProjectName, &p.TaskName, &p.PromptText, &p.State, &p.LastLaunchError, &p.CreatedAt); err != nil {

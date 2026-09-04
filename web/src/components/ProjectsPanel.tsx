@@ -14,7 +14,9 @@ export function ProjectsPanel() {
     const token = await getAccessToken();
     try {
       const data = await getProjects(token);
-      setProjects(data);
+      // Defense in depth: normalize a null/undefined API response to an
+      // empty array — see PromptsPanel.tsx's refresh() for why.
+      setProjects(data ?? []);
       setError(null);
     } catch {
       setError('Projects unavailable');

@@ -292,3 +292,48 @@ func TestStore_SetLaunchError_ThenMarkCreatingSpecClearsIt(t *testing.T) {
 		t.Errorf("State = %q, want %q", got.State, store.StateCreatingSpec)
 	}
 }
+
+// Regression test for a live-prod incident (2026-09-04): ListProjects and
+// ListPrompts used `var out []T` (a nil slice) as their accumulator, which
+// encoding/json marshals as the JSON literal `null` rather than `[]` when
+// no rows match. The frontend's project-select dropdown did an unguarded
+// `projects.map(...)` assuming an array, so a `null` response threw and
+// React unmounted the whole page to a blank screen — reproducible simply
+// by opening the Projects page against a freshly deployed, empty database.
+func TestStore_ListProjects_EmptyReturnsEmptySliceNotNil(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	s.ExecCleanup(ctx, "DELETE FROM "+testSchema+".prompt")
+	s.ExecCleanup(ctx, "DELETE FROM "+testSchema+".project")
+
+	projects, err := s.ListProjects(ctx)
+	if err != nil {
+		t.Fatalf("ListProjects: %v", err)
+	}
+	if projects == nil {
+		t.Error("ListProjects returned nil, want a non-nil empty slice (JSON must encode as [] not null)")
+	}
+	if len(projects) != 0 {
+		t.Errorf("ListProjects returned %d projects, want 0 (schema was just cleared)", len(projects))
+	}
+}
+
+func TestStore_ListPrompts_EmptyReturnsEmptySliceNotNil(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	s.ExecCleanup(ctx, "DELETE FROM "+testSchema+".prompt")
+	s.ExecCleanup(ctx, "DELETE FROM "+testSchema+".project")
+
+	prompts, err := s.ListPrompts(ctx)
+	if err != nil {
+		t.Fatalf("ListPrompts: %v", err)
+	}
+	if prompts == nil {
+		t.Error("ListPrompts returned nil, want a non-nil empty slice (JSON must encode as [] not null)")
+	}
+	if len(prompts) != 0 {
+		t.Errorf("ListPrompts returned %d prompts, want 0 (schema was just cleared)", len(prompts))
+	}
+}
