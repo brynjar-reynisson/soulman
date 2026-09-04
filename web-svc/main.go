@@ -49,6 +49,7 @@ func main() {
 		MemorySvcURL:       cfg.MemorySvcURL,
 		ThinkingSvcURL:     cfg.ThinkingSvcURL,
 		ActionSvcURL:       cfg.ActionSvcURL,
+		ProjectsSvcURL:     cfg.ProjectsSvcURL,
 		ReportsRoot:        cfg.SoulmanRoot,
 		ObsidianRoot:       cfg.ObsidianRoot,
 		ClaudeProjectRoots: claudeRoots,

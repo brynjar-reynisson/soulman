@@ -28,6 +28,7 @@ type Config struct {
 	MemorySvcURL       string
 	ThinkingSvcURL     string
 	ActionSvcURL       string
+	ProjectsSvcURL     string
 	ReportsRoot        string
 	ObsidianRoot       string
 	ClaudeProjectRoots []claudesession.Root
@@ -106,6 +107,13 @@ func (s *Server) buildRouter() chi.Router {
 		r.Post("/api/files/upload", s.filesUpload)
 		r.Post("/api/files/share", s.filesShare)
 		r.Get("/api/search", s.search)
+		r.Get("/api/projects/projects", s.proxyProjects(projectsPath))
+		r.Post("/api/projects/projects", s.proxyProjects(projectsPath))
+		r.Put("/api/projects/projects/{name}", s.proxyProjects(projectByName))
+		r.Delete("/api/projects/projects/{name}", s.proxyProjects(projectByName))
+		r.Get("/api/projects/prompts", s.proxyProjects(promptsPath))
+		r.Post("/api/projects/prompts", s.proxyProjects(promptsPath))
+		r.Put("/api/projects/prompts/{id}", s.proxyProjects(promptByID))
 	})
 
 	r.Get("/dl/{token}", s.shareDownload)
