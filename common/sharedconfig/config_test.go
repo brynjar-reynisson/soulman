@@ -448,3 +448,47 @@ func TestLoad_MissingSchoolField_ZeroValue(t *testing.T) {
 		t.Errorf("School.RelevantGrades = %v, want empty when school block absent from JSON", cfg.School.RelevantGrades)
 	}
 }
+
+func TestLoad_WebFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	content := `{
+		"watch_paths": ["C:\\a\\errors"],
+		"web": {
+			"owner_email": "test@example.com",
+			"cors_allowed_origin": "http://localhost:5190",
+			"perception_svc_url": "http://localhost:9011",
+			"memory_svc_url": "http://localhost:9012",
+			"thinking_svc_url": "http://localhost:9013",
+			"action_svc_url": "http://localhost:9014",
+			"projects_svc_url": "http://localhost:9016"
+		}
+	}`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cfg, err := sharedconfig.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.Web.OwnerEmail != "test@example.com" {
+		t.Errorf("Web.OwnerEmail = %q, want test@example.com", cfg.Web.OwnerEmail)
+	}
+	if cfg.Web.PerceptionSvcURL != "http://localhost:9011" {
+		t.Errorf("Web.PerceptionSvcURL = %q, want http://localhost:9011", cfg.Web.PerceptionSvcURL)
+	}
+	if cfg.Web.MemorySvcURL != "http://localhost:9012" {
+		t.Errorf("Web.MemorySvcURL = %q, want http://localhost:9012", cfg.Web.MemorySvcURL)
+	}
+	if cfg.Web.ThinkingSvcURL != "http://localhost:9013" {
+		t.Errorf("Web.ThinkingSvcURL = %q, want http://localhost:9013", cfg.Web.ThinkingSvcURL)
+	}
+	if cfg.Web.ActionSvcURL != "http://localhost:9014" {
+		t.Errorf("Web.ActionSvcURL = %q, want http://localhost:9014", cfg.Web.ActionSvcURL)
+	}
+	if cfg.Web.ProjectsSvcURL != "http://localhost:9016" {
+		t.Errorf("Web.ProjectsSvcURL = %q, want http://localhost:9016", cfg.Web.ProjectsSvcURL)
+	}
+}

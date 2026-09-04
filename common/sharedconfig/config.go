@@ -194,6 +194,7 @@ type WebConfig struct {
 	MemorySvcURL       string              `json:"memory_svc_url"`
 	ThinkingSvcURL     string              `json:"thinking_svc_url"`
 	ActionSvcURL       string              `json:"action_svc_url"`
+	ProjectsSvcURL     string              `json:"projects_svc_url"`
 	ObsidianRoot       string              `json:"obsidian_root"`
 	ClaudeProjectRoots []ClaudeProjectRoot `json:"claude_project_roots"`
 	FileBrowserRoots   []FileBrowserRoot   `json:"file_browser_roots"`

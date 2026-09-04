@@ -44,6 +44,7 @@
     "memory_svc_url": "http://localhost:9002",
     "thinking_svc_url": "http://localhost:9003",
     "action_svc_url": "http://localhost:9004",
+    "projects_svc_url": "http://localhost:9006",
     "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian",
     "claude_project_roots": [
       { "label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian" },
