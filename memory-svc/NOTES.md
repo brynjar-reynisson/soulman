@@ -4,7 +4,7 @@ Incidents, gotchas, and decisions learned running this service — not captured 
 
 ## Test suites were polluting live NATS (incident, 2026-09-03)
 
-`natsconsumer/consumer_test.go` and `natsconsumer/memory_write_consumer_test.go` connected to the real shared dev/prod NATS server by default and published test payloads onto the real `soulman.stimulus.raw`/`soulman.memory.write` subjects — fake `OutcomeRecord`s landed as genuine episode rows in Postgres, and `consumer_test.go`'s `TestMain` unconditionally **purged the real `STIMULUS` and `MEMORY_WRITE` JetStream streams** on every test run, silently deleting any unconsumed real message. Every live-NATS test (and the `TestMain` purge) now requires `SOULMAN_NATS_INTEGRATION_TESTS=1` to run. Full incident writeup and root cause: `perception-svc/NOTES.md`.
+`natsconsumer/consumer_test.go` and `natsconsumer/memory_write_consumer_test.go` connected to the real shared NATS server by default and published test payloads onto the real `soulman.stimulus.raw`/`soulman.memory.write` subjects — fake `OutcomeRecord`s landed as genuine episode rows in Postgres, and `consumer_test.go`'s `TestMain` unconditionally **purged the real `STIMULUS` and `MEMORY_WRITE` JetStream streams** on every test run, silently deleting any unconsumed real message. Every live-NATS test (and the `TestMain` purge) now requires `SOULMAN_NATS_INTEGRATION_TESTS=1` to run. Full incident writeup and root cause: `perception-svc/NOTES.md`.
 
 ## Episodes consumer has no file-log/replay layer
 
@@ -16,7 +16,7 @@ Unlike the STIMULUS consumer (`natsconsumer.Consumer`), `MemoryWriteConsumer` do
 
 ## The episodes table isn't created by memory-svc
 
-Same as `raw_inputs`: `memory-svc` never runs its own DDL. Both tables are applied by hand once per environment — `episodes` via `docs/superpowers/specs/sql/2026-07-18-episodes-table.sql`, `raw_inputs` via `docs/superpowers/specs/sql/2026-08-08-raw-inputs-table.sql` (added retroactively, see the incident below — no DDL for `raw_inputs` had ever been committed before this, since `memory_dev`'s copy was originally created live by the `soulman-db-builder` OpenCode agent rather than from a checked-in file).
+Same as `raw_inputs`: `memory-svc` never runs its own DDL. Both tables are applied by hand — `episodes` via `docs/superpowers/specs/sql/2026-07-18-episodes-table.sql`, `raw_inputs` via `docs/superpowers/specs/sql/2026-08-08-raw-inputs-table.sql` (added retroactively, see the incident below — no DDL for `raw_inputs` had ever been committed before this, since the schema was originally created live by the `soulman-db-builder` OpenCode agent rather than from a checked-in file).
 
 ## Leveled logging (log/slog, added 2026-07-27)
 
@@ -26,7 +26,7 @@ All `log.Printf`/`log.Fatalf` call sites replaced with stdlib `log/slog` (`slog.
 
 Postgres connectivity is tracked via a `common/dephealth.Registry`, wrapped by `storage.DBHolder` — every real Postgres call (insert, query, episode write) records its outcome, and `GET /health` now reports `dependencies.postgres` (`ok`/`down`, plus `since`/`detail` when down) instead of the old flat `db: "connected"/"unavailable"` field. A background `storage.Reconnector` ticks every 30s: while disconnected it retries `NewDB`; while connected it pings the existing pool. This is what makes a Postgres outage self-healing — before this, a failed startup connect left the DB `nil` for the process's entire lifetime, requiring a manual restart to recover even after Postgres came back. See `docs/superpowers/specs/2026-07-27-dependency-health-design.md`.
 
-`perception-svc`'s `system_monitor` polls this service's `/health` via a new `internal_health` check (`config/dev.json`/`config/prod.json`) and notifies Discord on any dependency's `ok`↔`down` transition — not on every poll while steady, matching the Log Error channel's dedup philosophy.
+`perception-svc`'s `system_monitor` polls this service's `/health` via a new `internal_health` check (`config/prod.json`) and notifies Discord on any dependency's `ok`↔`down` transition — not on every poll while steady, matching the Log Error channel's dedup philosophy.
 
 ## Known gap: buffered writes don't auto-replay after a mid-run reconnect (as of 2026-07-27)
 
@@ -38,6 +38,6 @@ The gap noted above ("`memory_prod`'s schema doesn't exist yet at all") went una
 
 **Why the 2026-07-27 dependency-health work didn't catch this:** `dephealth`/`DBHolder`/`Reconnector` all track *connectivity* (can we dial and ping Postgres) — that was fine the whole time. A missing table is a query-level failure on an otherwise-healthy connection, so `GET /health`'s `dependencies.postgres` reported `"ok"` throughout the entire 9-day outage. This class of failure — schema/DDL drift on an environment that's otherwise reachable — is invisible to the current health check. No fix attempted here; flagging it as a real blind spot for whoever next touches dependency health.
 
-**Fix applied:** created `memory_prod` schema + `raw_inputs` + `episodes` tables by hand (via `docker exec -i supabase_db_agent-suite psql`, both tables verified column-for-column identical to the live `memory_dev` copies — see `\d` output captured during the fix), restarted prod's `memory-svc`. Confirmed clean: 189 file-buffered `raw_inputs` rows and 146 NATS-redelivered `episodes` rows landed with zero new error lines afterward. The 2.46GB log was archived then deleted (its 11M lines were 100% the same repeated error, fully summarized in `soulman-prod/MEMORY_SVC_LOG_FINDINGS.md` from the initial investigation) — not merged into the fresh log.
+**Fix applied:** created `memory_prod` schema + `raw_inputs` + `episodes` tables by hand (via `docker exec -i supabase_db_agent-suite psql`, both tables verified column-for-column identical to the already-existing copies — see `\d` output captured during the fix), restarted prod's `memory-svc`. Confirmed clean: 189 file-buffered `raw_inputs` rows and 146 NATS-redelivered `episodes` rows landed with zero new error lines afterward. The 2.46GB log was archived then deleted (its 11M lines were 100% the same repeated error, fully summarized in `soulman-prod/MEMORY_SVC_LOG_FINDINGS.md` from the initial investigation) — not merged into the fresh log.
 
 **Process gap, not just a data gap:** this was caught by manually noticing disk usage, not by any monitoring. `perception-svc`'s `internal_health` check would have caught a connectivity-down transition immediately (see above) but is structurally blind to this failure mode. There's currently no alert on log file size or growth rate either. Both are real gaps; neither fixed here.
