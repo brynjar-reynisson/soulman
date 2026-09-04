@@ -108,6 +108,16 @@ async function mutateJSON(
   }
 }
 
+async function deleteRequest(path: string, token: string | null): Promise<void> {
+  const response = await fetch(path, {
+    method: 'DELETE',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, `${path} failed (${response.status})`);
+  }
+}
+
 export const getObsidianFolders = (token: string | null): Promise<ObsidianFolders> =>
   getJSON('/api/obsidian/folders', token);
 
@@ -267,3 +277,51 @@ export interface SearchResults {
 
 export const search = (token: string | null, query: string): Promise<SearchResults> =>
   getJSON(`/api/search?q=${encodeURIComponent(query)}`, token);
+
+export interface Project {
+  name: string;
+  path: string;
+}
+
+export interface Prompt {
+  id: number;
+  project_name: string;
+  task_name: string;
+  prompt_text: string;
+  state: 'NOT_STARTED' | 'CREATING_SPEC' | 'IMPLEMENTING' | 'DONE';
+  last_launch_error?: string;
+  created_at: string;
+}
+
+export const getProjects = (token: string | null): Promise<Project[]> =>
+  getJSON('/api/projects/projects', token);
+
+export const createProject = (token: string | null, name: string, path: string): Promise<void> =>
+  mutateJSON('POST', '/api/projects/projects', token, { name, path });
+
+export const updateProject = (token: string | null, name: string, path: string): Promise<void> =>
+  mutateJSON('PUT', `/api/projects/projects/${encodeURIComponent(name)}`, token, { path });
+
+export const deleteProject = (token: string | null, name: string): Promise<void> =>
+  deleteRequest(`/api/projects/projects/${encodeURIComponent(name)}`, token);
+
+export const getPrompts = (token: string | null): Promise<Prompt[]> =>
+  getJSON('/api/projects/prompts', token);
+
+export const createPrompt = (
+  token: string | null,
+  projectName: string,
+  taskName: string,
+  promptText: string,
+): Promise<void> =>
+  mutateJSON('POST', '/api/projects/prompts', token, {
+    project_name: projectName,
+    task_name: taskName,
+    prompt_text: promptText,
+  });
+
+export const updatePromptState = (
+  token: string | null,
+  id: number,
+  state: Prompt['state'],
+): Promise<void> => mutateJSON('PUT', `/api/projects/prompts/${id}`, token, { state });
