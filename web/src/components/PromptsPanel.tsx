@@ -82,39 +82,43 @@ export function PromptsPanel({
       {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
       {prompts === null && <p className="text-sm text-gray-500">Loading...</p>}
       {prompts && (
+        // DONE prompts are hidden by default — the backend still returns
+        // them (available via the API for diagnostics), this is a
+        // display-only filter. A future read-only "show done" view can
+        // reuse the same `prompts` state without any backend change.
         <table className="mb-4 w-full text-sm">
           <thead>
             <tr className="text-left text-gray-500">
               <th className="pb-1">Project</th>
               <th className="pb-1">Task</th>
               <th className="pb-1">State</th>
-              <th className="pb-1">Created</th>
             </tr>
           </thead>
           <tbody>
-            {prompts.map((p) => (
-              <tr key={p.id} className="border-t border-gray-100">
-                <td className="py-1">{p.project_name}</td>
-                <td className="py-1">{p.task_name}</td>
-                <td className="py-1">
-                  <select
-                    value={p.state}
-                    onChange={(e) => handleStateChange(p.id, e.target.value as Prompt['state'])}
-                    className="rounded border border-gray-300 px-1 py-0.5 text-xs"
-                  >
-                    {STATES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                  {p.last_launch_error && (
-                    <p className="mt-1 text-xs text-red-600">{p.last_launch_error}</p>
-                  )}
-                </td>
-                <td className="py-1 text-gray-500">{new Date(p.created_at).toLocaleString()}</td>
-              </tr>
-            ))}
+            {prompts
+              .filter((p) => p.state !== 'DONE')
+              .map((p) => (
+                <tr key={p.id} className="border-t border-gray-100">
+                  <td className="py-1">{p.project_name}</td>
+                  <td className="py-1">{p.task_name}</td>
+                  <td className="py-1">
+                    <select
+                      value={p.state}
+                      onChange={(e) => handleStateChange(p.id, e.target.value as Prompt['state'])}
+                      className="rounded border border-gray-300 px-1 py-0.5 text-xs"
+                    >
+                      {STATES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                    {p.last_launch_error && (
+                      <p className="mt-1 text-xs text-red-600">{p.last_launch_error}</p>
+                    )}
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       )}

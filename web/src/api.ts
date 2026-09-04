@@ -291,6 +291,9 @@ export interface Prompt {
   state: 'NOT_STARTED' | 'CREATING_SPEC' | 'IMPLEMENTING' | 'DONE';
   last_launch_error?: string;
   created_at: string;
+  // Diagnostic-only — not rendered in the UI (see PromptsPanel.tsx).
+  implementation_started_at?: string;
+  done_at?: string;
 }
 
 export const getProjects = (token: string | null): Promise<Project[]> =>

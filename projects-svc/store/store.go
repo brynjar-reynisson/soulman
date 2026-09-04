@@ -37,13 +37,20 @@ type Project struct {
 }
 
 type Prompt struct {
-	ID              int64     `json:"id"`
-	ProjectName     string    `json:"project_name"`
-	TaskName        string    `json:"task_name"`
-	PromptText      string    `json:"prompt_text"`
-	State           string    `json:"state"`
-	LastLaunchError *string   `json:"last_launch_error,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
+	ID              int64      `json:"id"`
+	ProjectName     string     `json:"project_name"`
+	TaskName        string     `json:"task_name"`
+	PromptText      string     `json:"prompt_text"`
+	State           string     `json:"state"`
+	LastLaunchError *string    `json:"last_launch_error,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	// ImplementationStartedAt/DoneAt are diagnostic-only — not surfaced in
+	// the web UI (see docs/superpowers/specs/2026-09-04-projects-tool-design.md),
+	// set by UpdatePromptState whenever a prompt transitions to
+	// IMPLEMENTING/DONE respectively, regardless of whether that transition
+	// came from the /notify callback or a manual state edit.
+	ImplementationStartedAt *time.Time `json:"implementation_started_at,omitempty"`
+	DoneAt                  *time.Time `json:"done_at,omitempty"`
 }
 
 type Store struct {
@@ -137,7 +144,7 @@ func (s *Store) GetProject(ctx context.Context, name string) (Project, error) {
 
 func (s *Store) ListPrompts(ctx context.Context) ([]Prompt, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(
-		`SELECT id, project_name, task_name, prompt_text, state, last_launch_error, created_at
+		`SELECT id, project_name, task_name, prompt_text, state, last_launch_error, created_at, implementation_started_at, done_at
 		 FROM %s.prompt ORDER BY id`, s.schema))
 	if err != nil {
 		return nil, fmt.Errorf("store: list prompts: %w", err)
@@ -146,7 +153,7 @@ func (s *Store) ListPrompts(ctx context.Context) ([]Prompt, error) {
 	out := []Prompt{}
 	for rows.Next() {
 		var p Prompt
-		if err := rows.Scan(&p.ID, &p.ProjectName, &p.TaskName, &p.PromptText, &p.State, &p.LastLaunchError, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.ProjectName, &p.TaskName, &p.PromptText, &p.State, &p.LastLaunchError, &p.CreatedAt, &p.ImplementationStartedAt, &p.DoneAt); err != nil {
 			return nil, fmt.Errorf("store: scan prompt: %w", err)
 		}
 		out = append(out, p)
@@ -159,9 +166,9 @@ func (s *Store) CreatePrompt(ctx context.Context, projectName, taskName, promptT
 	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
 		INSERT INTO %s.prompt (project_name, task_name, prompt_text)
 		VALUES ($1, $2, $3)
-		RETURNING id, project_name, task_name, prompt_text, state, last_launch_error, created_at
+		RETURNING id, project_name, task_name, prompt_text, state, last_launch_error, created_at, implementation_started_at, done_at
 	`, s.schema), projectName, taskName, promptText).
-		Scan(&p.ID, &p.ProjectName, &p.TaskName, &p.PromptText, &p.State, &p.LastLaunchError, &p.CreatedAt)
+		Scan(&p.ID, &p.ProjectName, &p.TaskName, &p.PromptText, &p.State, &p.LastLaunchError, &p.CreatedAt, &p.ImplementationStartedAt, &p.DoneAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == foreignKeyViolation {
@@ -172,9 +179,21 @@ func (s *Store) CreatePrompt(ctx context.Context, projectName, taskName, promptT
 	return p, nil
 }
 
+// UpdatePromptState sets state and, as a side effect, stamps
+// implementation_started_at/done_at with now() whenever state is
+// IMPLEMENTING/DONE respectively — the single point both the /notify
+// callback and a manual UI state edit funnel through, so both paths get
+// these diagnostic timestamps for free. Re-entering the same state again
+// (e.g. a reset-then-relaunch) overwrites the timestamp with the latest
+// occurrence rather than preserving the first.
 func (s *Store) UpdatePromptState(ctx context.Context, id int64, state string) error {
-	tag, err := s.pool.Exec(ctx, fmt.Sprintf(
-		`UPDATE %s.prompt SET state = $1 WHERE id = $2`, s.schema), state, id)
+	tag, err := s.pool.Exec(ctx, fmt.Sprintf(`
+		UPDATE %s.prompt
+		SET state = $1,
+		    implementation_started_at = CASE WHEN $1 = '%s' THEN now() ELSE implementation_started_at END,
+		    done_at = CASE WHEN $1 = '%s' THEN now() ELSE done_at END
+		WHERE id = $2
+	`, s.schema, StateImplementing, StateDone), state, id)
 	if err != nil {
 		return fmt.Errorf("store: update prompt state: %w", err)
 	}
@@ -217,10 +236,10 @@ func (s *Store) HasCreatingSpec(ctx context.Context) (bool, error) {
 func (s *Store) OldestNotStarted(ctx context.Context) (*Prompt, error) {
 	var p Prompt
 	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
-		SELECT id, project_name, task_name, prompt_text, state, last_launch_error, created_at
+		SELECT id, project_name, task_name, prompt_text, state, last_launch_error, created_at, implementation_started_at, done_at
 		FROM %s.prompt WHERE state = $1 ORDER BY id LIMIT 1
 	`, s.schema), StateNotStarted).
-		Scan(&p.ID, &p.ProjectName, &p.TaskName, &p.PromptText, &p.State, &p.LastLaunchError, &p.CreatedAt)
+		Scan(&p.ID, &p.ProjectName, &p.TaskName, &p.PromptText, &p.State, &p.LastLaunchError, &p.CreatedAt, &p.ImplementationStartedAt, &p.DoneAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

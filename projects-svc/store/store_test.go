@@ -161,6 +161,64 @@ func TestStore_CreatePrompt_DefaultsToNotStarted(t *testing.T) {
 	if p.LastLaunchError != nil {
 		t.Errorf("LastLaunchError = %v, want nil", p.LastLaunchError)
 	}
+	if p.ImplementationStartedAt != nil {
+		t.Errorf("ImplementationStartedAt = %v, want nil", p.ImplementationStartedAt)
+	}
+	if p.DoneAt != nil {
+		t.Errorf("DoneAt = %v, want nil", p.DoneAt)
+	}
+}
+
+func TestStore_UpdatePromptState_StampsImplementationStartedAtAndDoneAt(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	name := uniqueName("proj")
+	cleanupProject(t, s, name)
+
+	if err := s.CreateProject(ctx, store.Project{Name: name, Path: `C:\tmp`}); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	p, err := s.CreatePrompt(ctx, name, "task", "text")
+	if err != nil {
+		t.Fatalf("CreatePrompt: %v", err)
+	}
+
+	find := func() store.Prompt {
+		t.Helper()
+		prompts, err := s.ListPrompts(ctx)
+		if err != nil {
+			t.Fatalf("ListPrompts: %v", err)
+		}
+		for _, got := range prompts {
+			if got.ID == p.ID {
+				return got
+			}
+		}
+		t.Fatalf("prompt %d not found after ListPrompts", p.ID)
+		return store.Prompt{}
+	}
+
+	if err := s.UpdatePromptState(ctx, p.ID, store.StateImplementing); err != nil {
+		t.Fatalf("UpdatePromptState(IMPLEMENTING): %v", err)
+	}
+	got := find()
+	if got.ImplementationStartedAt == nil {
+		t.Error("ImplementationStartedAt = nil after transitioning to IMPLEMENTING, want a timestamp")
+	}
+	if got.DoneAt != nil {
+		t.Errorf("DoneAt = %v after transitioning to IMPLEMENTING, want nil", got.DoneAt)
+	}
+
+	if err := s.UpdatePromptState(ctx, p.ID, store.StateDone); err != nil {
+		t.Fatalf("UpdatePromptState(DONE): %v", err)
+	}
+	got = find()
+	if got.ImplementationStartedAt == nil {
+		t.Error("ImplementationStartedAt = nil after transitioning to DONE, want it to remain set from the earlier IMPLEMENTING transition")
+	}
+	if got.DoneAt == nil {
+		t.Error("DoneAt = nil after transitioning to DONE, want a timestamp")
+	}
 }
 
 func TestStore_MarkCreatingSpecAndHasCreatingSpec(t *testing.T) {
