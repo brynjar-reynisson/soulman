@@ -13,16 +13,16 @@ Public API:
     store.start()
 
     # Write
-    store.insert("raw_inputs", {"stimulus_id": "...", ...}, schema="memory_dev")
-    store.upsert("facts", {...}, schema="memory_dev")
+    store.insert("raw_inputs", {"stimulus_id": "...", ...}, schema="memory_prod")
+    store.upsert("facts", {...}, schema="memory_prod")
 
     # Read
-    store.select("episodes", where="source = 'human'", schema="memory_dev")
-    store.semantic_search("facts", embedding=[0.1, 0.2, ...], schema="memory_dev")
+    store.select("episodes", where="source = 'human'", schema="memory_prod")
+    store.semantic_search("facts", embedding=[0.1, 0.2, ...], schema="memory_prod")
     store.read_log("raw_inputs", limit=20)
 
     # Replay
-    store.replay(schema="memory_dev")
+    store.replay(schema="memory_prod")
 
     store.stop()
 """
