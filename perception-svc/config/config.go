@@ -126,12 +126,11 @@ func Load() (*Config, error) {
 		SystemMonitorServiceGraceMinutes:   shared.SystemMonitor.ServiceGracePeriodMinutes,
 
 		// LOG_DIR is not currently set by perception-svc's run-perception-svc.ps1
-		// launchers in soulman-dev/soulman-prod (verified against the live
-		// scripts while writing this plan) — only memory-svc's launcher sets
-		// it, for its own unrelated file-log purpose. This default lets local
-		// `go run .` work out of the box; see this plan's self-review for the
-		// one-line manual addition needed in both environments' launcher
-		// scripts before this channel finds real sibling logs.
+		// launcher (verified against the live script while writing this plan) —
+		// only memory-svc's launcher sets it, for its own unrelated file-log
+		// purpose. This default lets local `go run .` work out of the box; see
+		// this plan's self-review for the one-line manual addition needed in
+		// the launcher script before this channel finds real sibling logs.
 		LogDir:                             env("LOG_DIR", "./logs"),
 		LogMonitorCheckpointPath:           filepath.Join(filepath.Dir(checkpointPath), "logmonitor-checkpoint.json"),
 		LogMonitorReconcileIntervalSeconds: shared.LogMonitor.ReconciliationIntervalSeconds,

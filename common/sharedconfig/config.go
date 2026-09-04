@@ -1,8 +1,8 @@
 // Package sharedconfig loads the non-secret settings shared across
-// Soulman's services from a per-environment JSON file (config/dev.json,
-// config/prod.json in the vault; copied to <env-root>\config.json at
-// launch by each run-<svc>.ps1 script). Secrets never belong here — they
-// stay in .env, which is deliberately kept outside the git-tracked vault.
+// Soulman's services from config/prod.json in the vault, copied to
+// <env-root>\config.json at launch by each run-<svc>.ps1 script. Secrets
+// never belong here — they stay in .env, which is deliberately kept
+// outside the git-tracked vault.
 package sharedconfig
 
 import (
@@ -52,10 +52,7 @@ type ConsumerNames struct {
 // GmailConfig holds perception-svc's Gmail channel settings: the search
 // query used to find matching messages, the label applied to mark them
 // processed (Gmail's own labels are the dedup checkpoint — no local state
-// file), and how often to poll. Both dev and prod populate this — only the
-// query/seen_label values differ, since both watch the same real inbox and
-// each marks what it processes with its own label so neither re-processes
-// the other's work.
+// file), and how often to poll.
 type GmailConfig struct {
 	Query               string `json:"query"`
 	SeenLabel           string `json:"seen_label"`
@@ -137,10 +134,8 @@ type DNDConfig struct {
 
 // SchoolConfig holds the school-email-events feature's settings, shared
 // between thinking-svc (SenderDomains, Enabled) and action-svc (Enabled,
-// NotifyTime, CalendarRecipientEmails). Enabled is false in dev.json and
-// true in prod.json — dev and prod poll the same real inbox, so running
-// this feature in both would create duplicate Calendar invites and
-// duplicate Discord messages. See
+// NotifyTime, CalendarRecipientEmails). Enabled is true in prod.json for
+// the real school-email deployment. See
 // docs/superpowers/specs/2026-09-03-school-email-events-design.md.
 type SchoolConfig struct {
 	Enabled                 bool     `json:"enabled"`
