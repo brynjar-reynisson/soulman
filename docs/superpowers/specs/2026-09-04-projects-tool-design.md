@@ -76,9 +76,12 @@ create table prompt (
   prompt_text text not null,
   state text not null default 'NOT_STARTED'
     check (state in ('NOT_STARTED', 'CREATING_SPEC', 'IMPLEMENTING', 'DONE')),
+  last_launch_error text,
   created_at timestamptz not null default now()
 );
 ```
+
+`last_launch_error` backs the "surface why a task hasn't started" behavior described under `dispatch.TryDispatchNext` below — omitted from an earlier draft of this table, added here for consistency with the rest of this spec.
 
 No `ON DELETE CASCADE` on the `project_name` foreign key — deleting a `project` referenced by any `prompt` fails on the FK constraint; the API surfaces this as a clear `409`-style error rather than silently removing prompt history.
 
