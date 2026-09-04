@@ -1413,9 +1413,37 @@ func (f *fakeStore) UpdatePromptState(ctx context.Context, id int64, state strin
 	return f.updateStateErr
 }
 
+// noopDispatchStore is a dispatch.Store that always reports "busy" (a
+// prompt is CREATING_SPEC), so TryDispatchNext no-ops immediately without
+// calling any other method. Used to build an inert *dispatch.Dispatcher
+// for tests that don't exercise dispatch behavior — passing a nil Store
+// interface instead (newNoopDispatcher()) is NOT safe: a nil-interface
+// method call panics, and Task 7's /notify handler runs TryDispatchNext
+// in an unrecovered goroutine, so that panic would crash the whole test
+// binary rather than just fail one test. This type is defined once, here,
+// and reused by Task 7's notify_test.go (same httpserver_test package —
+// do not redefine it there).
+type noopDispatchStore struct{}
+
+func (noopDispatchStore) HasCreatingSpec(ctx context.Context) (bool, error) { return true, nil }
+func (noopDispatchStore) OldestNotStarted(ctx context.Context) (*store.Prompt, error) {
+	return nil, nil
+}
+func (noopDispatchStore) GetProject(ctx context.Context, name string) (store.Project, error) {
+	return store.Project{}, nil
+}
+func (noopDispatchStore) MarkCreatingSpec(ctx context.Context, id int64) error { return nil }
+func (noopDispatchStore) SetLaunchError(ctx context.Context, id int64, msg string) error {
+	return nil
+}
+
+func newNoopDispatcher() *dispatch.Dispatcher {
+	return dispatch.New(noopDispatchStore{}, func(store.Project, store.Prompt) error { return nil })
+}
+
 func TestListProjects_ReturnsJSON(t *testing.T) {
 	fs := &fakeStore{projects: []store.Project{{Name: "demo", Path: `C:\demo`}}}
-	srv := httpserver.New(fs, dispatch.New(nil, nil))
+	srv := httpserver.New(fs, newNoopDispatcher())
 
 	req := httptest.NewRequest(http.MethodGet, "/projects", nil)
 	rec := httptest.NewRecorder()
@@ -1435,7 +1463,7 @@ func TestListProjects_ReturnsJSON(t *testing.T) {
 
 func TestCreateProject_Success_Returns201(t *testing.T) {
 	fs := &fakeStore{}
-	srv := httpserver.New(fs, dispatch.New(nil, nil))
+	srv := httpserver.New(fs, newNoopDispatcher())
 
 	body, _ := json.Marshal(store.Project{Name: "demo", Path: `C:\demo`})
 	req := httptest.NewRequest(http.MethodPost, "/projects", bytes.NewReader(body))
@@ -1449,7 +1477,7 @@ func TestCreateProject_Success_Returns201(t *testing.T) {
 
 func TestCreateProject_AlreadyExists_Returns409(t *testing.T) {
 	fs := &fakeStore{createErr: store.ErrAlreadyExists}
-	srv := httpserver.New(fs, dispatch.New(nil, nil))
+	srv := httpserver.New(fs, newNoopDispatcher())
 
 	body, _ := json.Marshal(store.Project{Name: "demo", Path: `C:\demo`})
 	req := httptest.NewRequest(http.MethodPost, "/projects", bytes.NewReader(body))
@@ -1463,7 +1491,7 @@ func TestCreateProject_AlreadyExists_Returns409(t *testing.T) {
 
 func TestCreateProject_MissingFields_Returns400(t *testing.T) {
 	fs := &fakeStore{}
-	srv := httpserver.New(fs, dispatch.New(nil, nil))
+	srv := httpserver.New(fs, newNoopDispatcher())
 
 	body, _ := json.Marshal(store.Project{Name: "demo"})
 	req := httptest.NewRequest(http.MethodPost, "/projects", bytes.NewReader(body))
@@ -1477,7 +1505,7 @@ func TestCreateProject_MissingFields_Returns400(t *testing.T) {
 
 func TestDeleteProject_HasPrompts_Returns409(t *testing.T) {
 	fs := &fakeStore{deleteErr: store.ErrHasPrompts}
-	srv := httpserver.New(fs, dispatch.New(nil, nil))
+	srv := httpserver.New(fs, newNoopDispatcher())
 
 	req := httptest.NewRequest(http.MethodDelete, "/projects/demo", nil)
 	rec := httptest.NewRecorder()
@@ -1490,7 +1518,7 @@ func TestDeleteProject_HasPrompts_Returns409(t *testing.T) {
 
 func TestDeleteProject_NotFound_Returns404(t *testing.T) {
 	fs := &fakeStore{deleteErr: store.ErrNotFound}
-	srv := httpserver.New(fs, dispatch.New(nil, nil))
+	srv := httpserver.New(fs, newNoopDispatcher())
 
 	req := httptest.NewRequest(http.MethodDelete, "/projects/missing", nil)
 	rec := httptest.NewRecorder()
@@ -1503,7 +1531,7 @@ func TestDeleteProject_NotFound_Returns404(t *testing.T) {
 
 func TestCreatePrompt_Success_Returns201(t *testing.T) {
 	fs := &fakeStore{}
-	srv := httpserver.New(fs, dispatch.New(nil, nil))
+	srv := httpserver.New(fs, newNoopDispatcher())
 
 	body, _ := json.Marshal(map[string]string{"project_name": "demo", "task_name": "task", "prompt_text": "do it"})
 	req := httptest.NewRequest(http.MethodPost, "/prompts", bytes.NewReader(body))
@@ -1517,7 +1545,7 @@ func TestCreatePrompt_Success_Returns201(t *testing.T) {
 
 func TestCreatePrompt_UnknownProject_Returns400(t *testing.T) {
 	fs := &fakeStore{createPromptErr: store.ErrNotFound}
-	srv := httpserver.New(fs, dispatch.New(nil, nil))
+	srv := httpserver.New(fs, newNoopDispatcher())
 
 	body, _ := json.Marshal(map[string]string{"project_name": "missing", "task_name": "task", "prompt_text": "do it"})
 	req := httptest.NewRequest(http.MethodPost, "/prompts", bytes.NewReader(body))
@@ -1531,7 +1559,7 @@ func TestCreatePrompt_UnknownProject_Returns400(t *testing.T) {
 
 func TestUpdatePromptState_InvalidState_Returns400(t *testing.T) {
 	fs := &fakeStore{}
-	srv := httpserver.New(fs, dispatch.New(nil, nil))
+	srv := httpserver.New(fs, newNoopDispatcher())
 
 	body, _ := json.Marshal(map[string]string{"state": "NOT_A_REAL_STATE"})
 	req := httptest.NewRequest(http.MethodPut, "/prompts/1", bytes.NewReader(body))
@@ -1545,7 +1573,7 @@ func TestUpdatePromptState_InvalidState_Returns400(t *testing.T) {
 
 func TestUpdatePromptState_ValidState_Returns204(t *testing.T) {
 	fs := &fakeStore{}
-	srv := httpserver.New(fs, dispatch.New(nil, nil))
+	srv := httpserver.New(fs, newNoopDispatcher())
 
 	body, _ := json.Marshal(map[string]string{"state": store.StateNotStarted})
 	req := httptest.NewRequest(http.MethodPut, "/prompts/1", bytes.NewReader(body))
@@ -1777,7 +1805,7 @@ func writeError(w http.ResponseWriter, status int, message string) {
 }
 ```
 
-Note: `TestListProjects_ReturnsJSON` and similar tests pass `dispatch.New(nil, nil)` — `TryDispatchNext` is only reached in `createPrompt`, which every test above triggers with a `fakeStore` whose `CreatePrompt` never errors, so `TryDispatchNext` runs against a `Dispatcher` with a `nil` `Store`/`LaunchFunc`. Guard against a nil dispatcher panicking in tests by checking `s.dispatcher != nil` as shown above (this also makes the field genuinely optional for any future caller that doesn't need auto-dispatch).
+Note: `TestListProjects_ReturnsJSON` and similar tests pass `newNoopDispatcher()` rather than a `dispatch.New(nil, nil)` built from nil interfaces — `TryDispatchNext` is reached whenever `createPrompt` succeeds (every test above that hits `POST /prompts`), and calling a method on a genuinely nil `Store` interface panics. `newNoopDispatcher()`'s `noopDispatchStore` always reports "busy," so `TryDispatchNext` no-ops immediately and safely. Also guard against a nil `*Server.dispatcher` field itself by checking `s.dispatcher != nil` before calling it, as shown above (this makes the field genuinely optional for any future caller that doesn't need auto-dispatch).
 
 - [ ] **Step 5: Run the tests, verify they pass**
 
@@ -1805,7 +1833,7 @@ Claude-Session: https://claude.ai/code/session_0145DzrC2W5CLksBESBsJpaA"
 - Create: `projects-svc/httpserver/notify_test.go`
 
 **Interfaces:**
-- Consumes: `store.UpdatePromptState`, `store.StateImplementing`/`StateDone` (Task 3), `dispatch.Dispatcher.TryDispatchNext` (Task 5).
+- Consumes: `store.UpdatePromptState`, `store.StateImplementing`/`StateDone` (Task 3), `dispatch.Dispatcher.TryDispatchNext` (Task 5), and — in `notify_test.go` only — the `noopDispatchStore` type and `newNoopDispatcher()` helper function already defined in `projects-svc/httpserver/server_test.go` (Task 6, same `httpserver_test` package). Do not redefine them; `notify_test.go` does not need to import `soulman/projects-svc/dispatch` at all, since it never names that package directly.
 - Produces (consumed by Task 8 `main.go`):
   ```go
   func NewNotifyServer(st NotifyStore, d *dispatch.Dispatcher) *http.Server
@@ -1823,10 +1851,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"soulman/projects-svc/dispatch"
 	"soulman/projects-svc/httpserver"
 	"soulman/projects-svc/store"
 )
+
+// newNoopDispatcher is defined in server_test.go (Task 6, same
+// httpserver_test package) — reused here, not redefined.
 
 type fakeNotifyStore struct {
 	updateStateErr error
@@ -1841,7 +1871,7 @@ func (f *fakeNotifyStore) UpdatePromptState(ctx context.Context, id int64, state
 
 func TestNotify_LoopbackAddress_Implementing_Returns204(t *testing.T) {
 	fs := &fakeNotifyStore{}
-	srv := httpserver.NewNotifyServer(fs, dispatch.New(nil, nil))
+	srv := httpserver.NewNotifyServer(fs, newNoopDispatcher())
 
 	body := bytes.NewReader([]byte(`{"prompt_id": 7, "state": "IMPLEMENTING"}`))
 	req := httptest.NewRequest(http.MethodPost, "/notify", body)
@@ -1859,7 +1889,7 @@ func TestNotify_LoopbackAddress_Implementing_Returns204(t *testing.T) {
 
 func TestNotify_NonLoopbackAddress_Returns403(t *testing.T) {
 	fs := &fakeNotifyStore{}
-	srv := httpserver.NewNotifyServer(fs, dispatch.New(nil, nil))
+	srv := httpserver.NewNotifyServer(fs, newNoopDispatcher())
 
 	body := bytes.NewReader([]byte(`{"prompt_id": 7, "state": "IMPLEMENTING"}`))
 	req := httptest.NewRequest(http.MethodPost, "/notify", body)
@@ -1877,7 +1907,7 @@ func TestNotify_NonLoopbackAddress_Returns403(t *testing.T) {
 
 func TestNotify_InvalidState_Returns400(t *testing.T) {
 	fs := &fakeNotifyStore{}
-	srv := httpserver.NewNotifyServer(fs, dispatch.New(nil, nil))
+	srv := httpserver.NewNotifyServer(fs, newNoopDispatcher())
 
 	body := bytes.NewReader([]byte(`{"prompt_id": 7, "state": "NOT_A_REAL_STATE"}`))
 	req := httptest.NewRequest(http.MethodPost, "/notify", body)
@@ -1892,7 +1922,7 @@ func TestNotify_InvalidState_Returns400(t *testing.T) {
 
 func TestNotify_NotFoundPromptID_Returns404(t *testing.T) {
 	fs := &fakeNotifyStore{updateStateErr: store.ErrNotFound}
-	srv := httpserver.NewNotifyServer(fs, dispatch.New(nil, nil))
+	srv := httpserver.NewNotifyServer(fs, newNoopDispatcher())
 
 	body := bytes.NewReader([]byte(`{"prompt_id": 999, "state": "DONE"}`))
 	req := httptest.NewRequest(http.MethodPost, "/notify", body)
@@ -1922,6 +1952,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 
@@ -1979,9 +2010,24 @@ func notifyHandler(st NotifyStore, d *dispatch.Dispatcher) http.HandlerFunc {
 		w.WriteHeader(http.StatusNoContent)
 
 		if body.State == store.StateImplementing && d != nil {
-			go d.TryDispatchNext(context.Background())
+			go dispatchNextSafely(d)
 		}
 	}
+}
+
+// dispatchNextSafely runs TryDispatchNext in the background goroutine
+// notifyHandler spawns, recovering any panic so a bug in the dispatch
+// path can never crash the whole process from an unrecovered goroutine
+// panic — chi's middleware.Recoverer (used by the main CRUD router) does
+// NOT protect goroutines spawned from within a handler, only the
+// synchronous request-handling goroutine itself.
+func dispatchNextSafely(d *dispatch.Dispatcher) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("notify: TryDispatchNext panicked", "recovered", r)
+		}
+	}()
+	d.TryDispatchNext(context.Background())
 }
 
 func isLoopback(remoteAddr string) bool {
@@ -2245,8 +2291,10 @@ Claude-Session: https://claude.ai/code/session_0145DzrC2W5CLksBESBsJpaA"
 package httpserver_test
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"soulman/web-svc/auth"
@@ -2284,8 +2332,7 @@ func TestAPIProjects_ProxiesCreateWithBodyAndMethod(t *testing.T) {
 	var gotBody []byte
 	projectsSvc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotMethod = r.Method
-		gotBody = make([]byte, r.ContentLength)
-		r.Body.Read(gotBody)
+		gotBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusCreated)
 	}))
 	defer projectsSvc.Close()
@@ -2294,7 +2341,8 @@ func TestAPIProjects_ProxiesCreateWithBodyAndMethod(t *testing.T) {
 	verifier := auth.NewVerifier(testSupabaseURL, testSecret, testOwnerEmail)
 	srv := httpserver.New("9005", cfg, verifier)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/projects/projects", httptest.NewRequest(http.MethodPost, "/", nil).Body)
+	wantBody := `{"name":"demo","path":"C:\\demo"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/projects/projects", strings.NewReader(wantBody))
 	req.Header.Set("Authorization", "Bearer "+ownerToken(t))
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
@@ -2304,6 +2352,9 @@ func TestAPIProjects_ProxiesCreateWithBodyAndMethod(t *testing.T) {
 	}
 	if gotMethod != http.MethodPost {
 		t.Errorf("proxied method = %s, want POST", gotMethod)
+	}
+	if string(gotBody) != wantBody {
+		t.Errorf("proxied body = %s, want %s", gotBody, wantBody)
 	}
 }
 
