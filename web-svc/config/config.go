@@ -18,6 +18,7 @@ type Config struct {
 	MemorySvcURL       string
 	ThinkingSvcURL     string
 	ActionSvcURL       string
+	ProjectsSvcURL     string
 	SoulmanRoot        string
 	ObsidianRoot       string
 	ClaudeProjectRoots []sharedconfig.ClaudeProjectRoot
@@ -50,6 +51,9 @@ func Load() (*Config, error) {
 	}
 	if shared.Web.ActionSvcURL == "" {
 		return nil, fmt.Errorf("shared config %s has no web.action_svc_url configured", configPath)
+	}
+	if shared.Web.ProjectsSvcURL == "" {
+		return nil, fmt.Errorf("shared config %s has no web.projects_svc_url configured", configPath)
 	}
 	if shared.Web.ObsidianRoot == "" {
 		return nil, fmt.Errorf("shared config %s has no web.obsidian_root configured", configPath)
@@ -88,6 +92,7 @@ func Load() (*Config, error) {
 		MemorySvcURL:       shared.Web.MemorySvcURL,
 		ThinkingSvcURL:     shared.Web.ThinkingSvcURL,
 		ActionSvcURL:       shared.Web.ActionSvcURL,
+		ProjectsSvcURL:     shared.Web.ProjectsSvcURL,
 		SoulmanRoot:        env("SOULMAN_ROOT", `C:\Users\Lenovo\soulman-dev`),
 		ObsidianRoot:       shared.Web.ObsidianRoot,
 		ClaudeProjectRoots: shared.Web.ClaudeProjectRoots,

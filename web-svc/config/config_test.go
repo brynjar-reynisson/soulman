@@ -26,6 +26,7 @@ const validConfigJSON = `{
     "memory_svc_url": "http://localhost:9012",
     "thinking_svc_url": "http://localhost:9013",
     "action_svc_url": "http://localhost:9014",
+    "projects_svc_url": "http://localhost:9016",
     "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian",
     "claude_project_roots": [
       {"label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian"}
@@ -170,6 +171,9 @@ func TestLoad_PopulatesDownstreamURLsAndCORSOrigin(t *testing.T) {
 	}
 	if cfg.ActionSvcURL != "http://localhost:9014" {
 		t.Errorf("ActionSvcURL = %q", cfg.ActionSvcURL)
+	}
+	if cfg.ProjectsSvcURL != "http://localhost:9016" {
+		t.Errorf("ProjectsSvcURL = %q", cfg.ProjectsSvcURL)
 	}
 }
 
@@ -362,7 +366,7 @@ func TestLoad_ShareLinkTTLDefaultsTo60Minutes(t *testing.T) {
 
 func TestLoad_ShareLinkTTLMinutesOverride(t *testing.T) {
 	dir := t.TempDir()
-	withTTL := `{"web": {"owner_email": "breynisson@gmail.com", "cors_allowed_origin": "http://localhost:5178", "perception_svc_url": "http://localhost:9011", "memory_svc_url": "http://localhost:9012", "thinking_svc_url": "http://localhost:9013", "action_svc_url": "http://localhost:9014", "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian", "claude_project_roots": [{"label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian"}], "file_browser_roots": [{"label": "Documents", "path": "C:\\Users\\Lenovo\\Documents"}], "share_link_ttl_minutes": 15}}`
+	withTTL := `{"web": {"owner_email": "breynisson@gmail.com", "cors_allowed_origin": "http://localhost:5178", "perception_svc_url": "http://localhost:9011", "memory_svc_url": "http://localhost:9012", "thinking_svc_url": "http://localhost:9013", "action_svc_url": "http://localhost:9014", "projects_svc_url": "http://localhost:9016", "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian", "claude_project_roots": [{"label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian"}], "file_browser_roots": [{"label": "Documents", "path": "C:\\Users\\Lenovo\\Documents"}], "share_link_ttl_minutes": 15}}`
 	path := writeConfigFile(t, dir, withTTL)
 	os.Setenv("CONFIG_PATH", path)
 	os.Setenv("SUPABASE_URL", "https://example.supabase.co")
@@ -418,5 +422,21 @@ func TestLoad_BraveSearchAPIKeyEnvOverride(t *testing.T) {
 	}
 	if cfg.BraveSearchAPIKey != "brave-test-key" {
 		t.Errorf("BraveSearchAPIKey = %q, want brave-test-key", cfg.BraveSearchAPIKey)
+	}
+}
+
+func TestLoad_MissingProjectsSvcURL_ReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	incomplete := `{"web": {"owner_email": "breynisson@gmail.com", "cors_allowed_origin": "http://localhost:5178", "perception_svc_url": "http://localhost:9011", "memory_svc_url": "http://localhost:9012", "thinking_svc_url": "http://localhost:9013", "action_svc_url": "http://localhost:9014", "projects_svc_url": "", "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian", "claude_project_roots": [{"label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian"}], "file_browser_roots": [{"label": "Documents", "path": "C:\\Users\\Lenovo\\Documents"}]}}`
+	path := writeConfigFile(t, dir, incomplete)
+	os.Setenv("CONFIG_PATH", path)
+	os.Setenv("SUPABASE_URL", "https://example.supabase.co")
+	os.Setenv("SUPABASE_JWT_SECRET", "shh")
+	defer os.Unsetenv("CONFIG_PATH")
+	defer os.Unsetenv("SUPABASE_URL")
+	defer os.Unsetenv("SUPABASE_JWT_SECRET")
+
+	if _, err := config.Load(); err == nil {
+		t.Fatal("Load() error = nil, want an error when web.projects_svc_url is blank")
 	}
 }
