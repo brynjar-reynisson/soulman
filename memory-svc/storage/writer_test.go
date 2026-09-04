@@ -51,7 +51,7 @@ func TestWriter_Write_MarkedSynced_WhenDBSucceeds(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		db.ExecCleanup(context.Background(), "DELETE FROM memory_dev.raw_inputs WHERE stimulus_id = $1", id)
+		db.ExecCleanup(context.Background(), "DELETE FROM memory_test.raw_inputs WHERE stimulus_id = $1", id)
 	})
 
 	if err := w.Write(context.Background(), s); err != nil {
@@ -88,7 +88,7 @@ func TestWriter_ReplayPending(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		db.ExecCleanup(context.Background(), "DELETE FROM memory_dev.raw_inputs WHERE stimulus_id = $1", id)
+		db.ExecCleanup(context.Background(), "DELETE FROM memory_test.raw_inputs WHERE stimulus_id = $1", id)
 	})
 
 	w := storage.NewWriter(fl, storage.NewDBHolder(db, dephealth.NewRegistry()))

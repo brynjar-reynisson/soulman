@@ -10,8 +10,8 @@ Usage:
 
     config = MemoryConfig()
     store = MemoryStore(config)
-    store.insert("raw_inputs", {"stimulus_id": "...", ...}, schema="memory_dev")
-    store.select("episodes", where="source = 'human'", schema="memory_dev")
+    store.insert("raw_inputs", {"stimulus_id": "...", ...}, schema="memory_prod")
+    store.select("episodes", where="source = 'human'", schema="memory_prod")
 """
 
 from __future__ import annotations
@@ -102,7 +102,7 @@ class MemoryStore:
         self,
         table: str,
         data: dict[str, Any],
-        schema: str = "memory_dev",
+        schema: str = "memory_prod",
     ) -> dict[str, Any]:
         """Insert a row. Returns the inserted row with generated IDs.
 
@@ -164,7 +164,7 @@ class MemoryStore:
         self,
         table: str,
         data: dict[str, Any],
-        schema: str = "memory_dev",
+        schema: str = "memory_prod",
         conflict_col: str = "id",
     ) -> dict[str, Any]:
         """Insert or update on conflict. Returns the resulting row."""
@@ -190,7 +190,7 @@ class MemoryStore:
         self,
         table: str,
         data: dict[str, Any],
-        schema: str = "memory_dev",
+        schema: str = "memory_prod",
         conflict_col: str = "id",
     ) -> dict[str, Any]:
         """Update a row by conflict column. Returns the updated row."""
@@ -215,7 +215,7 @@ class MemoryStore:
         self,
         table: str,
         data: dict[str, Any],
-        schema: str = "memory_dev",
+        schema: str = "memory_prod",
         operation: str = "insert",
         conflict_col: str = "id",
     ) -> dict[str, Any]:
@@ -232,7 +232,7 @@ class MemoryStore:
     def select(
         self,
         table: str,
-        schema: str = "memory_dev",
+        schema: str = "memory_prod",
         columns: str = "*",
         where: str = "",
         order_by: str = "",
@@ -268,7 +268,7 @@ class MemoryStore:
         finally:
             self._pool.putconn(conn)
 
-    def list_tables(self, schema: str = "memory_dev") -> dict[str, Any]:
+    def list_tables(self, schema: str = "memory_prod") -> dict[str, Any]:
         """List all tables in the given schema."""
         if not self.healthy:
             return {"status": "error", "error": "Postgres not reachable"}
@@ -295,7 +295,7 @@ class MemoryStore:
         self,
         table: str,
         embedding: list[float],
-        schema: str = "memory_dev",
+        schema: str = "memory_prod",
         columns: str = "*",
         where: str = "",
         limit: int = 50,
@@ -360,7 +360,7 @@ class MemoryStore:
 
     # ── Replay ────────────────────────────────────────────────────────────
 
-    def replay(self, schema: str = "memory_dev") -> dict[str, Any]:
+    def replay(self, schema: str = "memory_prod") -> dict[str, Any]:
         """Replay deferred writes from db_outage.jsonl into Postgres.
 
         Reads the outage log, attempts re-insertion, and reports results.

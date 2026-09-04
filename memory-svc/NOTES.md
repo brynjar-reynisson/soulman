@@ -18,6 +18,15 @@ Unlike the STIMULUS consumer (`natsconsumer.Consumer`), `MemoryWriteConsumer` do
 
 Same as `raw_inputs`: `memory-svc` never runs its own DDL. Both tables are applied by hand — `episodes` via `docs/superpowers/specs/sql/2026-07-18-episodes-table.sql`, `raw_inputs` via `docs/superpowers/specs/sql/2026-08-08-raw-inputs-table.sql` (added retroactively, see the incident below — no DDL for `raw_inputs` had ever been committed before this, since the schema was originally created live by the `soulman-db-builder` OpenCode agent rather than from a checked-in file).
 
+## Storage tests use a separate `memory_test` schema, not `memory_dev`/`memory_prod`
+
+`memory-svc/storage`'s DB-backed tests (`postgres_test.go`, `reconnect_test.go`, `writer_test.go`, `episodes_test.go`) connect to a dedicated `memory_test` schema on the same Postgres instance as `memory_prod` — never `memory_prod` itself, since these tests insert and delete real rows. Recreate it with:
+
+```
+docker exec -i supabase_db_agent-suite psql -U postgres -v schema=memory_test -f - < docs/superpowers/specs/sql/2026-08-08-raw-inputs-table.sql
+docker exec -i supabase_db_agent-suite psql -U postgres -v schema=memory_test -f - < docs/superpowers/specs/sql/2026-07-18-episodes-table.sql
+```
+
 ## Leveled logging (log/slog, added 2026-07-27)
 
 All `log.Printf`/`log.Fatalf` call sites replaced with stdlib `log/slog` (`slog.Error`/`slog.Warn`/`slog.Info`) — no new dependency, Go 1.25 already ships it. Prompted by a 2.75GB `soulman-prod/logs/memory-svc-startup-err.log` that had silently accumulated undifferentiated retry noise from a genuine, ongoing Postgres outage with no way to grep signal from noise. `storage/writer.go`'s DB-insert failures and `natsconsumer/memory_write_consumer.go`'s episode-write failures — both symptoms of that outage — are now `slog.Error`; the "DB unavailable, written to file only" fallback path stays `slog.Warn`. Startup `log.Fatalf` calls became `slog.Error(...)` followed by an explicit `os.Exit(1)`, since slog has no Fatal-and-exit helper.

@@ -56,7 +56,7 @@ mcp = FastMCP("soulman-memory", version="0.2.0")
 def soulman_store(
     table: str,
     data: str,
-    schema: str = "memory_dev",
+    schema: str = "memory_prod",
     operation: str = "insert",
     conflict_col: str = "id",
 ) -> str:
@@ -67,7 +67,7 @@ def soulman_store(
     Args:
         table: Target table name (raw_inputs, episodes, facts, procedures, goals, action_log)
         data: JSON string of column:value pairs
-        schema: Postgres schema (memory_dev or memory_prod)
+        schema: Postgres schema (default memory_prod)
         operation: 'insert', 'upsert', or 'update'
         conflict_col: Column for conflict resolution (default: id)
 
@@ -87,7 +87,7 @@ def soulman_store(
 def soulman_retrieve(
     query_type: str = "select",
     table: str = "",
-    schema: str = "memory_dev",
+    schema: str = "memory_prod",
     columns: str = "*",
     where: str = "",
     order_by: str = "",
@@ -101,7 +101,7 @@ def soulman_retrieve(
     Args:
         query_type: 'select', 'list_tables', 'read_log', or 'semantic'
         table: Target table (for select/semantic/read_log)
-        schema: Postgres schema (memory_dev or memory_prod)
+        schema: Postgres schema (default memory_prod)
         columns: Columns to select (default: *)
         where: WHERE clause (for select/semantic)
         order_by: ORDER BY clause (for select)
@@ -140,13 +140,13 @@ def soulman_retrieve(
 
 
 @mcp.tool()
-def soulman_replay(schema: str = "memory_dev") -> str:
+def soulman_replay(schema: str = "memory_prod") -> str:
     """Replay deferred writes from logs/db_outage.jsonl into Postgres.
 
     Delegates to MemoryStore.replay().
 
     Args:
-        schema: Postgres schema (memory_dev or memory_prod)
+        schema: Postgres schema (default memory_prod)
 
     Returns:
         JSON with replayed count, failed count, and details.

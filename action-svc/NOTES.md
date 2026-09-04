@@ -46,9 +46,9 @@ Dev and prod used to share one Discord bot/channel/token for "Soulman Reports," 
 
 ## Feign mode
 
-The `feign_mode` field in `config/prod.json` (currently `true` — not an environment variable, unlike `REPORT_NOTIFIER`/`DISCORD_BOT_TOKEN`) makes `action-svc` record outbound side effects instead of performing them — see `docs/superpowers/specs/2026-07-19-action-svc-feign-mode-design.md`. Concretely: the shared `notify.Notifier` (used by both the 10:00 AM daily-report cron and the gmail-triage batcher) is wrapped with `feign.Gate` in `main.go`; when the gate is enabled, `Send` appends a JSON line to `$SOULMAN_ROOT/logs/feigned-actions.jsonl` instead of hitting Discord's API. `episodes` rows stay honest about it too — `dispatchGmailTriage`'s `Decision` reads `"feigned notify via Discord"` instead of `"notified via Discord"`, and the daily cron's `Summary` reads `"Daily report delivery feigned"` instead of `"Daily report delivered"`, whenever the gate is on.
+The `feign_mode` field in `config/prod.json` (currently `false` — not an environment variable, unlike `REPORT_NOTIFIER`/`DISCORD_BOT_TOKEN`) makes `action-svc` record outbound side effects instead of performing them — see `docs/superpowers/specs/2026-07-19-action-svc-feign-mode-design.md`. Concretely: the shared `notify.Notifier` (used by both the 10:00 AM daily-report cron and the gmail-triage batcher) is wrapped with `feign.Gate` in `main.go`; when the gate is enabled, `Send` appends a JSON line to `$SOULMAN_ROOT/logs/feigned-actions.jsonl` instead of hitting Discord's API. `episodes` rows stay honest about it too — `dispatchGmailTriage`'s `Decision` reads `"feigned notify via Discord"` instead of `"notified via Discord"`, and the daily cron's `Summary` reads `"Daily report delivery feigned"` instead of `"Daily report delivered"`, whenever the gate is on.
 
-**If you're wondering why no Discord messages are arriving:** check `feign_mode` in the config first, before assuming something's broken. It was turned on deliberately as of 2026-07-19 — turn it back off (`feign_mode: false` in `config/prod.json`, then restart `action-svc`) when you want real sends again.
+**If you're wondering why no Discord messages are arriving:** check `feign_mode` in the running config first, before assuming something's broken — when it's `true`, `action-svc` records to `feigned-actions.jsonl` instead of sending for real; it's currently `false` in `config/prod.json`, so real sends should be going out normally.
 
 ## Important/not-important report split (added 2026-07-20)
 
@@ -60,7 +60,7 @@ See `docs/superpowers/specs/2026-07-20-daily-report-importance-split-design.md`.
 
 Previously, `Important: true` on an `append_daily_report_entry` action only changed which section of the daily report file the entry landed in — only `triage_gmail_email` triggered a real-time Discord notification. `system-monitor`'s critical/recovery alerts and any `folder-watcher` (`ErrorReportRule` always sets `Important: true`), `log-error`, or `cli-note` (`CLINoteRule` also always sets `Important: true` — every `soulman note "..."` CLI command, and any `POST /api/perceive/raw` debug injection that hits that rule, now triggers a real-time Discord notification too) entry now also queue on the same `notifybatch.Batcher` used by Gmail triage. This is an intentional behavior change flagged in `docs/superpowers/specs/2026-07-27-log-error-perception-design.md` — it closes the gap `2026-07-18-system-monitor-channel-design.md` explicitly called out of scope ("an immediate Discord ping on critical, the way Gmail triage does").
 
-`notifybatch.Item` gained a `Kind` field (`"gmail"` | `"report"`) so `formatBatch` can render each shape correctly in a single flushed message, including a batch that mixes both kinds. `feign_mode` (already `true` in `config/prod.json`) governs these sends exactly like it already governs Gmail's — no separate gate was needed.
+`notifybatch.Item` gained a `Kind` field (`"gmail"` | `"report"`) so `formatBatch` can render each shape correctly in a single flushed message, including a batch that mixes both kinds. `feign_mode` (in `config/prod.json`, currently `false`) governs these sends exactly like it already governs Gmail's — no separate gate was needed.
 
 ## Leveled logging (log/slog, added 2026-07-27)
 
@@ -72,7 +72,7 @@ See `docs/superpowers/specs/2026-07-27-discord-do-not-disturb-design.md`. Only `
 
 `Flusher.Start()` also flushes immediately if the process comes up outside the window with stale pending content (e.g. a restart at 11am after an earlier partial day's window already ended), rather than waiting for tomorrow's window-end.
 
-This is the prerequisite for turning `feign_mode` off — flipping that flag is a separate, deliberate deployment decision once DND is verified working for real (`do_not_disturb.enabled: true` as of this feature, even though sends are still feigned regardless).
+This was the prerequisite for turning `feign_mode` off — that flag has since been flipped to `false` in `config/prod.json`, a separate, deliberate deployment decision made once DND was verified working for real (`do_not_disturb.enabled: true` as of this feature).
 
 ## School event processing (added 2026-09-03)
 

@@ -19,7 +19,7 @@ func testDB(t *testing.T) *storage.DB {
 		dbURL = "postgres://postgres:postgres@localhost:54322/postgres"
 	}
 	ctx := context.Background()
-	db, err := storage.NewDB(ctx, dbURL, "memory_dev")
+	db, err := storage.NewDB(ctx, dbURL, "memory_test")
 	if err != nil {
 		t.Skipf("postgres not available (%v) — set DATABASE_URL to run DB tests", err)
 	}
@@ -47,7 +47,7 @@ func TestDB_InsertRawInput(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		db.ExecCleanup(context.Background(), "DELETE FROM memory_dev.raw_inputs WHERE stimulus_id = $1", id)
+		db.ExecCleanup(context.Background(), "DELETE FROM memory_test.raw_inputs WHERE stimulus_id = $1", id)
 	})
 
 	// Idempotency: second insert should not error
@@ -78,7 +78,7 @@ func TestDB_GetRecent(t *testing.T) {
 
 	t.Cleanup(func() {
 		for _, id := range []string{id1, id2} {
-			db.ExecCleanup(context.Background(), "DELETE FROM memory_dev.raw_inputs WHERE stimulus_id = $1", id)
+			db.ExecCleanup(context.Background(), "DELETE FROM memory_test.raw_inputs WHERE stimulus_id = $1", id)
 		}
 	})
 

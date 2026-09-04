@@ -29,7 +29,7 @@ func TestDB_WriteEpisode_And_GetRecentEpisodes(t *testing.T) {
 		t.Fatalf("WriteEpisode: %v", err)
 	}
 	t.Cleanup(func() {
-		db.ExecCleanup(context.Background(), "DELETE FROM memory_dev.episodes WHERE stream_seq = $1", int64(seq))
+		db.ExecCleanup(context.Background(), "DELETE FROM memory_test.episodes WHERE stream_seq = $1", int64(seq))
 	})
 
 	rows, err := db.GetRecentEpisodes(ctx, 20)
@@ -68,7 +68,7 @@ func TestDB_WriteEpisode_DedupsByStreamSeq(t *testing.T) {
 		t.Fatalf("first WriteEpisode: %v", err)
 	}
 	t.Cleanup(func() {
-		db.ExecCleanup(context.Background(), "DELETE FROM memory_dev.episodes WHERE stream_seq = $1", int64(seq))
+		db.ExecCleanup(context.Background(), "DELETE FROM memory_test.episodes WHERE stream_seq = $1", int64(seq))
 	})
 	if err := db.WriteEpisode(ctx, seq, rec); err != nil {
 		t.Errorf("second WriteEpisode (ON CONFLICT DO NOTHING) errored: %v", err)
@@ -108,6 +108,6 @@ func TestDB_WriteEpisode_NilTags_StoredAsEmptyNotNull(t *testing.T) {
 		t.Fatalf("WriteEpisode with nil Tags: %v", err)
 	}
 	t.Cleanup(func() {
-		db.ExecCleanup(context.Background(), "DELETE FROM memory_dev.episodes WHERE stream_seq = $1", int64(seq))
+		db.ExecCleanup(context.Background(), "DELETE FROM memory_test.episodes WHERE stream_seq = $1", int64(seq))
 	})
 }

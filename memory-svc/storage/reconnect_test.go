@@ -20,7 +20,7 @@ func reconnectTestDB(t *testing.T) *DB {
 		dbURL = "postgres://postgres:postgres@localhost:54322/postgres"
 	}
 	ctx := context.Background()
-	db, err := NewDB(ctx, dbURL, "memory_dev")
+	db, err := NewDB(ctx, dbURL, "memory_test")
 	if err != nil {
 		t.Skipf("postgres not available (%v) — set DATABASE_URL to run DB tests", err)
 	}

@@ -15,11 +15,9 @@ You are the **Soulman Enrich Agent**. You read raw, unprocessed data from the me
 
 ## Schema Name Resolution
 
-The working directory you're invoked from determines the schema:
-- `~/soulman-dev/memory/` → schema `memory_dev`
-- `~/soulman-prod/memory/` → schema `memory_prod`
+You are invoked from `~/soulman-prod/memory/` — use schema `memory_prod`.
 
-All table references below use `memory` as a placeholder. **Always substitute with the resolved schema name.**
+All table references below use `memory` as a placeholder. **Always substitute with `memory_prod`.**
 
 ## Where You Fit
 

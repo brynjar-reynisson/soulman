@@ -11,12 +11,12 @@ import (
 )
 
 // testSchema is a dedicated schema for these tests, separate from
-// projects_dev (the real dev deployment's schema). Several tests below
+// projects_prod (the real deployment's schema). Several tests below
 // assert global conditions (no other CREATING_SPEC prompt exists anywhere,
 // a freshly created prompt is the oldest NOT_STARTED row anywhere, etc.)
-// that would start failing the moment real dev data exists if this ran
-// against projects_dev. Apply the DDL to this schema before running these
-// tests locally:
+// that would start failing the moment real deployment data exists if this
+// ran against projects_prod. Apply the DDL to this schema before running
+// these tests locally:
 //
 //	psql "postgres://postgres:postgres@localhost:54322/postgres" -v schema=projects_test -f docs/superpowers/specs/sql/2026-09-04-projects-tables.sql
 const testSchema = "projects_test"

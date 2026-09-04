@@ -8,8 +8,8 @@ export default defineConfig({
     port: 5190,
     host: '0.0.0.0',
     proxy: {
-      '/api': { target: 'http://localhost:9015', changeOrigin: true },
-      '/dl': { target: 'http://localhost:9015', changeOrigin: true },
+      '/api': { target: 'http://localhost:9005', changeOrigin: true },
+      '/dl': { target: 'http://localhost:9005', changeOrigin: true },
     },
   },
   preview: {
