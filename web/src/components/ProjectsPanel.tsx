@@ -1,31 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { getAccessToken } from '../auth';
-import { getProjects, createProject, updateProject, deleteProject, ApiError, type Project } from '../api';
+import { createProject, updateProject, deleteProject, ApiError, type Project } from '../api';
 
-export function ProjectsPanel() {
-  const [projects, setProjects] = useState<Project[] | null>(null);
+// `projects`/`projectsError`/`refreshProjects` are owned by ProjectsPage and
+// shared with PromptsPanel — see ProjectsPage.tsx for why this list isn't
+// fetched locally here.
+export function ProjectsPanel({
+  projects,
+  projectsError,
+  refreshProjects,
+}: {
+  projects: Project[] | null;
+  projectsError: string | null;
+  refreshProjects: () => Promise<void>;
+}) {
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [path, setPath] = useState('');
   const [editingName, setEditingName] = useState<string | null>(null);
   const [editPath, setEditPath] = useState('');
-
-  async function refresh() {
-    const token = await getAccessToken();
-    try {
-      const data = await getProjects(token);
-      // Defense in depth: normalize a null/undefined API response to an
-      // empty array — see PromptsPanel.tsx's refresh() for why.
-      setProjects(data ?? []);
-      setError(null);
-    } catch {
-      setError('Projects unavailable');
-    }
-  }
-
-  useEffect(() => {
-    refresh();
-  }, []);
 
   async function handleAdd() {
     if (!name || !path) return;
@@ -34,7 +27,8 @@ export function ProjectsPanel() {
       await createProject(token, name, path);
       setName('');
       setPath('');
-      await refresh();
+      setError(null);
+      await refreshProjects();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to add project');
     }
@@ -44,7 +38,8 @@ export function ProjectsPanel() {
     const token = await getAccessToken();
     try {
       await deleteProject(token, projectName);
-      await refresh();
+      setError(null);
+      await refreshProjects();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setError(`Cannot delete "${projectName}": it still has prompts`);
@@ -71,16 +66,19 @@ export function ProjectsPanel() {
       await updateProject(token, projectName, editPath);
       setEditingName(null);
       setEditPath('');
-      await refresh();
+      setError(null);
+      await refreshProjects();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to update project');
     }
   }
 
+  const displayError = error ?? projectsError;
+
   return (
     <div className="rounded border border-gray-200 bg-white p-4">
       <h2 className="mb-3 text-lg font-semibold">Projects</h2>
-      {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+      {displayError && <p className="mb-2 text-sm text-red-600">{displayError}</p>}
       {projects === null && <p className="text-sm text-gray-500">Loading...</p>}
       {projects && (
         <table className="mb-4 w-full text-sm">

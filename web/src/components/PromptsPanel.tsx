@@ -4,7 +4,6 @@ import {
   getPrompts,
   createPrompt,
   updatePromptState,
-  getProjects,
   ApiError,
   type Prompt,
   type Project,
@@ -12,25 +11,29 @@ import {
 
 const STATES: Prompt['state'][] = ['NOT_STARTED', 'CREATING_SPEC', 'IMPLEMENTING', 'DONE'];
 
-export function PromptsPanel() {
+// `projects`/`refreshProjects` are owned by ProjectsPage and shared with
+// ProjectsPanel — see ProjectsPage.tsx for why this list isn't fetched
+// locally here. `prompts` remains this component's own concern.
+export function PromptsPanel({
+  projects,
+  refreshProjects,
+}: {
+  projects: Project[] | null;
+  refreshProjects: () => Promise<void>;
+}) {
   const [prompts, setPrompts] = useState<Prompt[] | null>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [projectName, setProjectName] = useState('');
   const [taskName, setTaskName] = useState('');
   const [promptText, setPromptText] = useState('');
 
-  async function refresh() {
+  async function refreshPrompts() {
     const token = await getAccessToken();
     try {
-      const [promptData, projectData] = await Promise.all([getPrompts(token), getProjects(token)]);
+      const data = await getPrompts(token);
       // Defense in depth: normalize a null/undefined API response to an
-      // empty array. The real bug (Go's ListProjects/ListPrompts returning
-      // a nil slice, which encoding/json marshals as `null` rather than
-      // `[]`) is fixed server-side, but an unguarded `.map()` on `null`
-      // here would still crash the whole page if that regressed.
-      setPrompts(promptData ?? []);
-      setProjects(projectData ?? []);
+      // empty array — see NOTES.md's empty-list incident for why.
+      setPrompts(data ?? []);
       setError(null);
     } catch {
       setError('Prompts unavailable');
@@ -38,8 +41,12 @@ export function PromptsPanel() {
   }
 
   useEffect(() => {
-    refresh();
+    refreshPrompts();
   }, []);
+
+  async function handleRefreshClick() {
+    await Promise.all([refreshPrompts(), refreshProjects()]);
+  }
 
   async function handleAdd() {
     if (!projectName || !taskName || !promptText) return;
@@ -48,7 +55,7 @@ export function PromptsPanel() {
       await createPrompt(token, projectName, taskName, promptText);
       setTaskName('');
       setPromptText('');
-      await refresh();
+      await refreshPrompts();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to add prompt');
     }
@@ -58,7 +65,7 @@ export function PromptsPanel() {
     const token = await getAccessToken();
     try {
       await updatePromptState(token, id, state);
-      await refresh();
+      await refreshPrompts();
     } catch {
       setError('Failed to update state');
     }
@@ -68,7 +75,7 @@ export function PromptsPanel() {
     <div className="rounded border border-gray-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Prompts</h2>
-        <button onClick={refresh} className="text-xs text-gray-500 underline">
+        <button onClick={handleRefreshClick} className="text-xs text-gray-500 underline">
           Refresh
         </button>
       </div>
@@ -118,7 +125,7 @@ export function PromptsPanel() {
           className="rounded border border-gray-300 px-2 py-1 text-sm"
         >
           <option value="">Select a project</option>
-          {projects.map((p) => (
+          {(projects ?? []).map((p) => (
             <option key={p.name} value={p.name}>
               {p.name}
             </option>
