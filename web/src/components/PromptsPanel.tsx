@@ -8,6 +8,7 @@ import {
   type Prompt,
   type Project,
 } from '../api';
+import { CompletedPromptsModal } from './CompletedPromptsModal';
 
 const STATES: Prompt['state'][] = ['NOT_STARTED', 'CREATING_SPEC', 'IMPLEMENTING', 'DONE'];
 
@@ -26,6 +27,7 @@ export function PromptsPanel({
   const [projectName, setProjectName] = useState('');
   const [taskName, setTaskName] = useState('');
   const [promptText, setPromptText] = useState('');
+  const [showCompleted, setShowCompleted] = useState(false);
 
   async function refreshPrompts() {
     const token = await getAccessToken();
@@ -151,7 +153,16 @@ export function PromptsPanel({
         <button onClick={handleAdd} className="self-start rounded bg-gray-800 px-3 py-1 text-sm text-white">
           Add Prompt
         </button>
+        <button
+          onClick={() => setShowCompleted(true)}
+          className="self-start text-xs text-gray-500 underline"
+        >
+          Completed
+        </button>
       </div>
+      {showCompleted && (
+        <CompletedPromptsModal prompts={prompts ?? []} onClose={() => setShowCompleted(false)} />
+      )}
     </div>
   );
 }
