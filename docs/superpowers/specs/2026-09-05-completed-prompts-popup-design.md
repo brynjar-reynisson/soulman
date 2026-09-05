@@ -22,7 +22,7 @@ The Projects tool's Prompts box (`PromptsPanel.tsx`) hides `DONE` prompts from i
 
 ## Design
 
-**`PromptsPanel.tsx`**: add a "Completed" text-link next to the existing "Refresh" link (same `text-xs text-gray-500 underline` styling). Clicking it sets `showCompleted` state to `true`, rendering a new `CompletedPromptsModal` conditionally, following the same conditional-render-by-parent pattern `RawInputsPanel.tsx` uses for `RawInputModal`.
+**`PromptsPanel.tsx`**: add a "Completed" text-link at the bottom of the box, below the existing "Add Prompt" button (same `text-xs text-gray-500 underline` styling already used by "Refresh"). Clicking it sets `showCompleted` state to `true`, rendering a new `CompletedPromptsModal` conditionally, following the same conditional-render-by-parent pattern `RawInputsPanel.tsx` uses for `RawInputModal`.
 
 **Derived list**: from the same `prompts` state already held by `PromptsPanel` (populated by the existing `getPrompts()` call — no new fetch), compute:
 
