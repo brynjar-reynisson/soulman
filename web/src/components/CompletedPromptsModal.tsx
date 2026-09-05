@@ -33,8 +33,12 @@ export function CompletedPromptsModal({
       >
         <div className="mb-2 flex items-center justify-between">
           <h3 className="font-medium">Completed Tasks</h3>
-          <button onClick={onClose} className="text-sm text-gray-500 underline" aria-label="Close">
-            Close
+          <button
+            onClick={onClose}
+            className="cursor-pointer text-sm text-gray-500 underline"
+            aria-label="Close"
+          >
+            X
           </button>
         </div>
         {done.length === 0 && <p className="text-sm text-gray-500">No completed tasks yet.</p>}
@@ -53,7 +57,7 @@ export function CompletedPromptsModal({
                   </div>
                   <div>
                     <dt className="text-gray-500">Prompt</dt>
-                    <dd className="whitespace-pre-wrap">{p.prompt_text}</dd>
+                    <dd className="whitespace-pre-wrap text-xs">{p.prompt_text}</dd>
                   </div>
                 </dl>
               </li>

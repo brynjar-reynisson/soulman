@@ -77,7 +77,7 @@ export function PromptsPanel({
     <div className="rounded border border-gray-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Prompts</h2>
-        <button onClick={handleRefreshClick} className="text-xs text-gray-500 underline">
+        <button onClick={handleRefreshClick} className="cursor-pointer text-xs text-gray-500 underline">
           Refresh
         </button>
       </div>
@@ -155,7 +155,7 @@ export function PromptsPanel({
         </button>
         <button
           onClick={() => setShowCompleted(true)}
-          className="self-start text-xs text-gray-500 underline"
+          className="cursor-pointer self-start text-xs text-gray-500 underline"
         >
           Completed
         </button>
