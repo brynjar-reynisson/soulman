@@ -34,4 +34,4 @@ Its only protection is the loopback bind on `NOTIFY_PORT` plus a `RemoteAddr` ch
 
 ## Known follow-up: no frontend test coverage
 
-This branch adds `web/src/api.ts`'s seven projects/prompts functions and three new components (`ProjectsPanel.tsx`, plus the page/nav wiring) with zero automated tests — unlike the rest of `web/`, which has an established test convention for its other panels. Deferred rather than fixed as part of the final review pass; worth picking up if `ProjectsPanel.tsx` grows more interactive logic (e.g. the edit-in-place control added in the same review pass).
+This branch adds the first test coverage for the projects/prompts feature (`PromptsPanel.test.tsx` and `CompletedPromptsModal.test.tsx`), but `ProjectsPanel.tsx` (the project CRUD table) and `ProjectsPage.tsx` (the page shell) still have zero automated tests — unlike the rest of `web/`, which has an established test convention for its other panels. Worth picking up if either component grows more interactive logic.
