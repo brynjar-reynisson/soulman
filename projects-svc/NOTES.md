@@ -35,3 +35,7 @@ Its only protection is the loopback bind on `NOTIFY_PORT` plus a `RemoteAddr` ch
 ## Known follow-up: no frontend test coverage
 
 This branch adds the first test coverage for the projects/prompts feature (`PromptsPanel.test.tsx` and `CompletedPromptsModal.test.tsx`), but `ProjectsPanel.tsx` (the project CRUD table) and `ProjectsPage.tsx` (the page shell) still have zero automated tests — unlike the rest of `web/`, which has an established test convention for its other panels. Worth picking up if either component grows more interactive logic.
+
+## Launched sessions use the home profile and a pre-trusted directory (2026-10-07)
+
+`launcher.Launch` strips `CLAUDE_CONFIG_DIR` from the child environment (so a work-profile shell that started projects-svc can't leak `~/.claude-work` into sessions) and marks `project.Path` as trusted in `~/.claude.json` before spawning, so the background session doesn't stall on the trust dialog. Same helper as `web-svc/claudesession/profile.go`; see `web-svc/NOTES.md` for details and the concurrent-write caveat.

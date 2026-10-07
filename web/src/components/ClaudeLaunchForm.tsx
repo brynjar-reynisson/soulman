@@ -33,6 +33,9 @@ export function ClaudeLaunchForm({ root, folder }: { root: string; folder: strin
         type="text"
         value={sessionName}
         onChange={(e) => setSessionName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && status !== 'launching') handleLaunch();
+        }}
         className="rounded border border-gray-300 px-2 py-1 text-sm"
       />
       <button

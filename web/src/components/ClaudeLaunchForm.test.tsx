@@ -33,6 +33,16 @@ describe('ClaudeLaunchForm', () => {
     expect(await screen.findByText(/session 'my-session' launched/i)).toBeInTheDocument();
   });
 
+  it('launches when Enter is pressed in the session name field', async () => {
+    mockLaunchClaudeSession.mockResolvedValue(undefined);
+    const { ClaudeLaunchForm } = await import('./ClaudeLaunchForm');
+    render(<ClaudeLaunchForm root="Obsidian" folder="soulman" />);
+
+    await userEvent.type(screen.getByRole('textbox'), '{Enter}');
+
+    expect(mockLaunchClaudeSession).toHaveBeenCalledWith('tok-abc', 'Obsidian', 'soulman', 'soulman');
+  });
+
   it('shows an error message when launch fails', async () => {
     const { ApiError } = await import('../api');
     mockLaunchClaudeSession.mockRejectedValue(new ApiError(500, 'launch failed'));

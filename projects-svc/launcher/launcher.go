@@ -13,6 +13,7 @@ package launcher
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 )
@@ -49,6 +50,10 @@ func Launch(project Project, prompt Prompt, notifyPort string) error {
 
 	cmd := exec.Command("claude", "--remote-control", "--bg", "--name", sessionName, fullPrompt)
 	cmd.Dir = project.Path
+	cmd.Env = homeProfileEnv()
+	if err := trustDirectory(project.Path); err != nil {
+		slog.Warn("could not pre-trust directory in ~/.claude.json", "dir", project.Path, "err", err)
+	}
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("%w: %v", ErrLaunchFailed, err)

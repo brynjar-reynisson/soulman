@@ -9,6 +9,7 @@ package claudesession
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -134,6 +135,10 @@ func Launch(root Root, folder, sessionName string) error {
 	}
 	cmd := exec.Command("claude", "--remote-control", "--bg", "--name", sessionName)
 	cmd.Dir = dir
+	cmd.Env = homeProfileEnv()
+	if err := trustDirectory(dir); err != nil {
+		slog.Warn("could not pre-trust directory in ~/.claude.json", "dir", dir, "err", err)
+	}
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("%w: %v", ErrLaunchFailed, err)
