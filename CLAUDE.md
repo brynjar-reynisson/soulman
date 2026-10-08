@@ -104,6 +104,10 @@ Perception → Thinking → Action
 
 Key boundary: `Stimulus` is the only format that crosses Perception → Thinking. Action Requests are the only format crossing Thinking → Action.
 
+## Git Workflow
+
+Work happens on a `feature/` or `bugfix/` branch. When it's done: merge to `main` **locally** (fast-forward), push `main`, then delete the branch (local and remote). No PRs. Anything that needs addressing after the merge goes on a new branch, never the merged one.
+
 ## Design Workflow
 
 1. Design and spec work happens **in this vault** (Obsidian notes).
