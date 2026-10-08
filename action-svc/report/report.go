@@ -32,7 +32,7 @@ func PathForDate(root string, date time.Time, important bool) string {
 	if !important {
 		suffix = "-fyi"
 	}
-	filename := fmt.Sprintf("daily-report-%s%s.txt", date.Local().Format("2006-01-02"), suffix)
+	filename := fmt.Sprintf("daily-report-%s%s.txt", date.Local().Format(time.DateOnly), suffix)
 	return filepath.Join(root, "reports", filename)
 }
 
@@ -128,7 +128,7 @@ func separatorFor(path string) (string, error) {
 
 func formatEntry(e Entry) string {
 	header := fmt.Sprintf("%s  [%s]  %s",
-		e.OccurredAt.Local().Format("2006-01-02 15:04"), filepath.Dir(e.SourcePath), e.Summary)
+		e.OccurredAt.Local().Format(dateTimeLayout), filepath.Dir(e.SourcePath), e.Summary)
 	if e.RawContent == "" {
 		return header
 	}
@@ -182,3 +182,6 @@ func combine(important, notImportant string) string {
 	}
 	return b.String()
 }
+
+// dateTimeLayout is "YYYY-MM-DD HH:MM" (no seconds); the stdlib time.DateTime includes seconds.
+const dateTimeLayout = "2006-01-02 15:04"

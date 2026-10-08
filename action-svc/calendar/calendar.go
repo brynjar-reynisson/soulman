@@ -86,16 +86,16 @@ func toCalendarEvent(inv Invite) *gcal.Event {
 	}
 
 	if !inv.HasTime {
-		date, err := time.Parse("2006-01-02", inv.Date)
+		date, err := time.Parse(time.DateOnly, inv.Date)
 		if err != nil {
 			date = time.Now()
 		}
-		ev.Start = &gcal.EventDateTime{Date: date.Format("2006-01-02")}
-		ev.End = &gcal.EventDateTime{Date: date.AddDate(0, 0, 1).Format("2006-01-02")}
+		ev.Start = &gcal.EventDateTime{Date: date.Format(time.DateOnly)}
+		ev.End = &gcal.EventDateTime{Date: date.AddDate(0, 0, 1).Format(time.DateOnly)}
 		return ev
 	}
 
-	start, err := time.ParseInLocation("2006-01-02 15:04", inv.Date+" "+inv.Time, time.Local)
+	start, err := time.ParseInLocation(dateTimeLayout, inv.Date+" "+inv.Time, time.Local)
 	if err != nil {
 		start = time.Now()
 	}
@@ -104,3 +104,6 @@ func toCalendarEvent(inv Invite) *gcal.Event {
 	ev.End = &gcal.EventDateTime{DateTime: end.Format(time.RFC3339)}
 	return ev
 }
+
+// dateTimeLayout is "YYYY-MM-DD HH:MM" (no seconds); the stdlib time.DateTime includes seconds.
+const dateTimeLayout = "2006-01-02 15:04"

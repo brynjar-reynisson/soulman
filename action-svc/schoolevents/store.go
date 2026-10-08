@@ -156,7 +156,7 @@ func DueOrOverdue(root string, now time.Time) ([]Event, error) {
 		if e.DiscordStatus != "pending" && e.CalendarStatus != "pending" {
 			continue
 		}
-		date, parseErr := time.ParseInLocation("2006-01-02", e.Date, now.Location())
+		date, parseErr := time.ParseInLocation(time.DateOnly, e.Date, now.Location())
 		if parseErr != nil {
 			continue
 		}

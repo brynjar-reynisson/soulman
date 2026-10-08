@@ -217,7 +217,7 @@ func TestPathForDate_NormalizesToLocal(t *testing.T) {
 	gotPlus := report.PathForDate(root, zonePlus12, true)
 	gotMinus := report.PathForDate(root, zoneMinus12, true)
 
-	wantFilename := fmt.Sprintf("daily-report-%s.txt", instant.Local().Format("2006-01-02"))
+	wantFilename := fmt.Sprintf("daily-report-%s.txt", instant.Local().Format(time.DateOnly))
 	want := filepath.Join(root, "reports", wantFilename)
 
 	if gotPlus != want {

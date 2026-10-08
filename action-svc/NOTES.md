@@ -85,3 +85,7 @@ Calendar invites are sent via a new OAuth scope (`calendar.events`). Setup requi
 A hardcoded 2-day stale cutoff filters events on every run, not just the startup catch-up: any event whose `date` is more than 2 days past is dropped by `DueOrOverdue` on every run, tick or startup catch-up alike, even if a calendar send previously failed. This prevents a restart during backlog catchup — or an ordinary daily tick — from re-notifying about events that already happened.
 
 See `docs/superpowers/specs/2026-09-03-school-email-events-design.md`'s OAuth Setup section for the manual bootstrap steps (enable Calendar API, create OAuth client, consent flow, Production publishing status) — not automated by any code in this repo.
+
+## Date layouts use `time.DateOnly` (2026-10-08)
+
+Go date layouts are written against the reference moment (`2006-01-02 15:04:05`), not letter codes like Java's `yyyy-MM-dd`. The repeated `"2006-01-02"` literals were replaced with the stdlib `time.DateOnly`; the no-seconds `"2006-01-02 15:04"` layout (no stdlib equivalent) is a `dateTimeLayout` constant in `calendar` and `report`. Pure refactor, no behavior change.

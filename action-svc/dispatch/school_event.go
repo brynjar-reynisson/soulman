@@ -67,7 +67,7 @@ func (d *Dispatcher) dispatchSchoolEvent(req common.ActionRequest) {
 	now := time.Now()
 	queued := 0
 	for i, ev := range p.Events {
-		date, parseErr := time.ParseInLocation("2006-01-02", ev.Date, now.Location())
+		date, parseErr := time.ParseInLocation(time.DateOnly, ev.Date, now.Location())
 		if parseErr != nil {
 			slog.Warn("dispatch: process_school_event unparseable event date, dropping", "date", ev.Date, "correlation_id", req.CorrelationID)
 			continue

@@ -97,11 +97,11 @@ func (s *Scheduler) RunOnce() {
 
 	content, err := report.Read(s.root, yesterday)
 	if err != nil {
-		slog.Error("scheduler: read report failed, will retry tomorrow", "date", yesterday.Format("2006-01-02"), "error", err)
+		slog.Error("scheduler: read report failed, will retry tomorrow", "date", yesterday.Format(time.DateOnly), "error", err)
 		return
 	}
 	if strings.TrimSpace(content) == "" {
-		slog.Info("scheduler: report empty or missing, nothing to send", "date", yesterday.Format("2006-01-02"))
+		slog.Info("scheduler: report empty or missing, nothing to send", "date", yesterday.Format(time.DateOnly))
 		return
 	}
 

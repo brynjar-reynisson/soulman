@@ -34,7 +34,7 @@ func TestDispatch_SchoolEvent_ContactEmail_PersistedToStore(t *testing.T) {
 	pub := &fakePublisher{}
 	d := dispatch.New(root, pub, nil, nil)
 
-	future := time.Now().AddDate(0, 0, 3).Format("2006-01-02")
+	future := time.Now().AddDate(0, 0, 3).Format(time.DateOnly)
 	req := common.ActionRequest{
 		CorrelationID: "s5",
 		ActionHint:    "process_school_event",
@@ -63,7 +63,7 @@ func TestDispatch_SchoolEvent_FutureDate_QueuesEvent(t *testing.T) {
 	pub := &fakePublisher{}
 	d := dispatch.New(root, pub, nil, nil)
 
-	future := time.Now().AddDate(0, 0, 3).Format("2006-01-02")
+	future := time.Now().AddDate(0, 0, 3).Format(time.DateOnly)
 	req := common.ActionRequest{
 		CorrelationID: "s1",
 		ActionHint:    "process_school_event",
@@ -94,7 +94,7 @@ func TestDispatch_SchoolEvent_PastDate_DroppedSilently(t *testing.T) {
 	pub := &fakePublisher{}
 	d := dispatch.New(root, pub, nil, nil)
 
-	past := time.Now().AddDate(0, 0, -3).Format("2006-01-02")
+	past := time.Now().AddDate(0, 0, -3).Format(time.DateOnly)
 	req := common.ActionRequest{
 		CorrelationID: "s2",
 		ActionHint:    "process_school_event",
@@ -137,7 +137,7 @@ func TestDispatch_SchoolEvent_EventsFound_OutcomeReflectsCount(t *testing.T) {
 	pub := &fakePublisher{}
 	d := dispatch.New(root, pub, nil, nil)
 
-	future := time.Now().AddDate(0, 0, 3).Format("2006-01-02")
+	future := time.Now().AddDate(0, 0, 3).Format(time.DateOnly)
 	req := common.ActionRequest{
 		CorrelationID: "s4",
 		ActionHint:    "process_school_event",

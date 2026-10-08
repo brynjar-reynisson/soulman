@@ -295,7 +295,7 @@ func formatSchoolMessage(group []schoolevents.Event, now time.Time) string {
 // display-only, never load-bearing for the due/overdue decision itself
 // (that's DueOrOverdue's job).
 func relativeDayLabel(date string, now time.Time) string {
-	parsed, err := time.ParseInLocation("2006-01-02", date, now.Location())
+	parsed, err := time.ParseInLocation(time.DateOnly, date, now.Location())
 	if err != nil {
 		return date
 	}
