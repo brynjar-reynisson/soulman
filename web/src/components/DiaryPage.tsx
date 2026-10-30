@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { getAccessToken } from '../auth';
 import {
   ApiError,
@@ -57,10 +57,11 @@ export function DiaryPage({ onBack }: { onBack: () => void }) {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  const [entriesFailed, setEntriesFailed] = useState(false);
 
   async function refreshTree() {
-    const token = await getAccessToken();
     try {
+      const token = await getAccessToken();
       const data = await getDiaryTree(token);
       setYears(data?.years ?? []);
       setError(null);
@@ -78,19 +79,28 @@ export function DiaryPage({ onBack }: { onBack: () => void }) {
   const monthNode = yearNode?.months.find((m) => m.month === openMonth) ?? null;
   const dayNode = monthNode?.days.find((d) => d.day === openDay) ?? null;
   const date = yearNode && monthNode && dayNode ? `${yearNode.year}-${monthNode.month}-${dayNode.day}` : null;
+  const currentDateRef = useRef<string | null>(date);
+  currentDateRef.current = date;
 
   useEffect(() => {
     setEntries(null);
     setEditing(null);
+    setEntriesFailed(false);
     if (!date) return;
     let active = true;
     (async () => {
-      const token = await getAccessToken();
       try {
+        const token = await getAccessToken();
         const data = await getDiaryEntries(token, date);
-        if (active) setEntries(data?.entries ?? []);
+        if (active) {
+          setEntries(data?.entries ?? []);
+          setError(null);
+        }
       } catch (err) {
-        if (active) setError(describeError(err, 'Entries unavailable'));
+        if (active) {
+          setEntriesFailed(true);
+          setError(describeError(err, 'Entries unavailable'));
+        }
       }
     })();
     return () => {
@@ -138,9 +148,12 @@ export function DiaryPage({ onBack }: { onBack: () => void }) {
 
   async function handleEditSave(entry: DiaryEntry) {
     if (!date) return;
+    const saveDate = date;
     try {
       const token = await getAccessToken();
-      await saveDiaryEntry(token, date, entry.name, draft);
+      await saveDiaryEntry(token, saveDate, entry.name, draft);
+      if (currentDateRef.current !== saveDate) return;
+      setError(null);
       setEntries((prev) =>
         prev ? prev.map((e) => (e.name === entry.name ? { ...e, content: draft } : e)) : prev,
       );
@@ -151,7 +164,7 @@ export function DiaryPage({ onBack }: { onBack: () => void }) {
   }
 
   function renderDay(): ReactNode {
-    if (entries === null) return <p className="text-sm text-gray-500">Loading…</p>;
+    if (entries === null) return entriesFailed ? null : <p className="text-sm text-gray-500">Loading…</p>;
     const sorted = [...entries].sort((a, b) => a.time.localeCompare(b.time));
     return (
       <ul className="space-y-3">

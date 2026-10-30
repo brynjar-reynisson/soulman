@@ -171,6 +171,66 @@ describe('DiaryPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('edit save failure keeps the draft and error; a retry that succeeds clears the error', async () => {
+    window.history.replaceState(null, '', '/?page=diary&diaryYear=2026&diaryMonth=03&diaryDay=05');
+    mockSave.mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce(undefined);
+    await renderPage();
+    await screen.findByText('first entry');
+    await userEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]);
+    const ta = screen.getByLabelText('Edit entry');
+    await userEvent.clear(ta);
+    await userEvent.type(ta, 'rewritten');
+    const row = ta.closest('li') as HTMLElement;
+    await userEvent.click(within(row).getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Save failed')).toBeInTheDocument();
+    expect(screen.getByLabelText('Edit entry')).toHaveValue('rewritten');
+    await userEvent.click(within(row).getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('rewritten')).toBeInTheDocument();
+    expect(screen.queryByText('Save failed')).not.toBeInTheDocument();
+  });
+
+  it('a failed create keeps the new-entry text', async () => {
+    mockCreate.mockRejectedValue(new Error('boom'));
+    await renderPage();
+    await screen.findByRole('button', { name: /2026/ });
+    await userEvent.type(screen.getByLabelText('New entry'), 'dear diary');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Save failed')).toBeInTheDocument();
+    expect(screen.getByLabelText('New entry')).toHaveValue('dear diary');
+  });
+
+  it('an in-flight edit save resolving after switching day does not touch the other day', async () => {
+    window.history.replaceState(null, '', '/?page=diary&diaryYear=2026&diaryMonth=03&diaryDay=05');
+    let resolveSave: () => void = () => {};
+    mockSave.mockReturnValue(new Promise<void>((res) => { resolveSave = res; }));
+    mockEntries.mockImplementation(async (_t: string, d: string) =>
+      d === '2026-03-05'
+        ? { entries: [{ name: 'a.txt', time: '09:15', content: 'first entry' }] }
+        : { entries: [{ name: 'a.txt', time: '08:00', content: 'other day entry' }] },
+    );
+    await renderPage();
+    await screen.findByText('first entry');
+    await userEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]);
+    const ta = screen.getByLabelText('Edit entry');
+    await userEvent.clear(ta);
+    await userEvent.type(ta, 'rewritten');
+    await userEvent.click(within(ta.closest('li') as HTMLElement).getByRole('button', { name: 'Save' }));
+    await userEvent.click(screen.getByRole('button', { name: /^\W*04/ }));
+    expect(await screen.findByText('other day entry')).toBeInTheDocument();
+    resolveSave();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByText('other day entry')).toBeInTheDocument();
+    expect(screen.queryByText('rewritten')).not.toBeInTheDocument();
+  });
+
+  it('a failed entries fetch shows the error, not Loading', async () => {
+    window.history.replaceState(null, '', '/?page=diary&diaryYear=2026&diaryMonth=03&diaryDay=05');
+    mockEntries.mockRejectedValue(new Error('boom'));
+    await renderPage();
+    expect(await screen.findByText('Entries unavailable')).toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+  });
+
   it('Back calls onBack', async () => {
     const onBack = await renderPage();
     await userEvent.click(screen.getByRole('button', { name: /Soulman/ }));

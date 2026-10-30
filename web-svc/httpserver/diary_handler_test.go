@@ -156,3 +156,40 @@ func TestAPIDiary_NoToken_Returns401(t *testing.T) {
 		t.Fatalf("status = %d, want 401", rec.Code)
 	}
 }
+
+func TestAPIDiaryCreate_MalformedJSON_Returns400(t *testing.T) {
+	rec := diaryDo(t, t.TempDir(), http.MethodPost, "/api/diary/entries", `{not json`, true)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestAPIDiaryUpdate_MalformedJSON_Returns400(t *testing.T) {
+	rec := diaryDo(t, t.TempDir(), http.MethodPut, "/api/diary/entries", `{not json`, true)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestAPIDiaryUpdate_MissingEntry_Returns404(t *testing.T) {
+	root := t.TempDir()
+	seedDiary(t, root, "2026-03-05", "entry-09-30-00.txt", "old")
+	rec := diaryDo(t, root, http.MethodPut, "/api/diary/entries",
+		`{"date":"2026-03-05","name":"entry-10-00-00.txt","content":"new"}`, true)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestAPIDiaryUpdate_EmptyContent_Returns204(t *testing.T) {
+	root := t.TempDir()
+	full := seedDiary(t, root, "2026-03-05", "entry-09-30-00.txt", "old")
+	rec := diaryDo(t, root, http.MethodPut, "/api/diary/entries",
+		`{"date":"2026-03-05","name":"entry-09-30-00.txt","content":""}`, true)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", rec.Code)
+	}
+	if b, _ := os.ReadFile(full); string(b) != "" {
+		t.Errorf("file = %q", b)
+	}
+}

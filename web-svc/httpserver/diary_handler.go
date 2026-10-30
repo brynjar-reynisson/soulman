@@ -3,6 +3,7 @@ package httpserver
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -22,6 +23,7 @@ func writeDiaryError(w http.ResponseWriter, err error) {
 	case errors.Is(err, diary.ErrExists):
 		writeJSONError(w, http.StatusConflict, "already exists")
 	default:
+		slog.Error("diary: unexpected error", "err", err)
 		writeJSONError(w, http.StatusInternalServerError, "internal error")
 	}
 }

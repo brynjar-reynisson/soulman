@@ -35,6 +35,7 @@ This file is intentionally an index, not an encyclopedia: each service/module be
 | `web-svc/`                      | Go service — Web dashboard backend runtime (`:9005`). See `web-svc/NOTES.md`. |
 | `web/`                          | React + Vite frontend — Soulman's web dashboard. See `web/README.md` (if present) or `web-svc/NOTES.md` for the auth flow. |
 | `projects-svc/`                 | Go service — Projects tool runtime, CRUD `:9006` / notify `:9007`. See `projects-svc/NOTES.md`. |
+| `scripts/`                     | One-off maintenance scripts, currently `migrate-diary-layout.ps1` (the diary layout migration) |
 
 ## Services
 
