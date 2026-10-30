@@ -9,9 +9,10 @@ import { ClaudePage } from './components/ClaudePage';
 import { FilesPage } from './components/FilesPage';
 import { SearchPage } from './components/SearchPage';
 import { ProjectsPage } from './components/ProjectsPage';
+import { DiaryPage } from './components/DiaryPage';
 import { getParam, setParams } from './urlState';
 
-type ViewState = 'loading' | 'login' | 'restricted' | 'dashboard' | 'obsidian' | 'claude' | 'files' | 'search' | 'projects';
+type ViewState = 'loading' | 'login' | 'restricted' | 'dashboard' | 'obsidian' | 'claude' | 'files' | 'search' | 'projects' | 'diary';
 
 function viewFromPageParam(): ViewState {
   const page = getParam('page');
@@ -20,6 +21,7 @@ function viewFromPageParam(): ViewState {
   if (page === 'files') return 'files';
   if (page === 'search') return 'search';
   if (page === 'projects') return 'projects';
+  if (page === 'diary') return 'diary';
   return 'dashboard';
 }
 
@@ -110,6 +112,17 @@ function App() {
     );
   }
 
+  if (view === 'diary') {
+    return (
+      <DiaryPage
+        onBack={() => {
+          setParams({ page: null, diaryYear: null, diaryMonth: null, diaryDay: null });
+          setView('dashboard');
+        }}
+      />
+    );
+  }
+
   return (
     <Dashboard
       initialStatus={status}
@@ -133,6 +146,10 @@ function App() {
       onOpenProjects={() => {
         setParams({ page: 'projects' });
         setView('projects');
+      }}
+      onOpenDiary={() => {
+        setParams({ page: 'diary' });
+        setView('diary');
       }}
     />
   );

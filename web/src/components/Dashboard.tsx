@@ -12,6 +12,7 @@ export function Dashboard({
   onOpenFiles,
   onOpenSearch,
   onOpenProjects,
+  onOpenDiary,
 }: {
   initialStatus: ServiceStatus | null;
   onSignOut: () => void;
@@ -20,6 +21,7 @@ export function Dashboard({
   onOpenFiles: () => void;
   onOpenSearch: () => void;
   onOpenProjects: () => void;
+  onOpenDiary: () => void;
 }) {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -28,6 +30,9 @@ export function Dashboard({
         <div className="flex items-center gap-4">
           <button onClick={onOpenProjects} className="text-sm text-gray-500 underline">
             Projects
+          </button>
+          <button onClick={onOpenDiary} className="text-sm text-gray-500 underline">
+            Diary
           </button>
           <button onClick={onOpenClaude} className="text-sm text-gray-500 underline">
             Claude

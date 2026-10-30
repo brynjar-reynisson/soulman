@@ -323,6 +323,64 @@ export const createPrompt = (
     prompt_text: promptText,
   });
 
+export interface DiaryDay {
+  day: string;
+  count: number;
+}
+
+export interface DiaryMonth {
+  month: string;
+  days: DiaryDay[];
+}
+
+export interface DiaryYear {
+  year: string;
+  months: DiaryMonth[];
+}
+
+export interface DiaryEntry {
+  name: string;
+  time: string;
+  content: string;
+}
+
+export interface DiaryCreated {
+  date: string;
+  name: string;
+  time: string;
+}
+
+export const getDiaryTree = (token: string | null): Promise<{ years: DiaryYear[] }> =>
+  getJSON('/api/diary/tree', token);
+
+export const getDiaryEntries = (
+  token: string | null,
+  date: string,
+): Promise<{ entries: DiaryEntry[] }> =>
+  getJSON(`/api/diary/entries?date=${encodeURIComponent(date)}`, token);
+
+export async function createDiaryEntry(token: string | null, content: string): Promise<DiaryCreated> {
+  const response = await fetch('/api/diary/entries', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ content }),
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, `/api/diary/entries failed (${response.status})`);
+  }
+  return response.json();
+}
+
+export const saveDiaryEntry = (
+  token: string | null,
+  date: string,
+  name: string,
+  content: string,
+): Promise<void> => mutateJSON('PUT', '/api/diary/entries', token, { date, name, content });
+
 export const updatePromptState = (
   token: string | null,
   id: number,

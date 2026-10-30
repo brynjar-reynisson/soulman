@@ -19,6 +19,10 @@ import {
   uploadFile,
   shareFile,
   search,
+  getDiaryTree,
+  getDiaryEntries,
+  createDiaryEntry,
+  saveDiaryEntry,
   ApiError,
 } from './api';
 
@@ -375,5 +379,55 @@ describe('search', () => {
     mockFetch.mockResolvedValue({ ok: false, status: 503 });
 
     await expect(search('tok-abc', 'soulman')).rejects.toThrow(ApiError);
+  });
+});
+
+describe('diary api', () => {
+  it('getDiaryTree fetches /api/diary/tree with the auth header', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ years: [] }) });
+    const result = await getDiaryTree('tok-abc');
+    expect(result).toEqual({ years: [] });
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/diary/tree');
+    expect(options.headers).toEqual({ Authorization: 'Bearer tok-abc' });
+  });
+
+  it('getDiaryEntries passes the encoded date', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ entries: [] }) });
+    await getDiaryEntries('tok-abc', '2026-03-05');
+    expect(mockFetch.mock.calls[0][0]).toBe('/api/diary/entries?date=2026-03-05');
+  });
+
+  it('createDiaryEntry POSTs content and returns the parsed body', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => ({ date: '2026-03-05', name: 'a.txt', time: '10:00' }),
+    });
+    const result = await createDiaryEntry('tok-abc', 'hello');
+    expect(result).toEqual({ date: '2026-03-05', name: 'a.txt', time: '10:00' });
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/diary/entries');
+    expect(options.method).toBe('POST');
+    expect(JSON.parse(options.body)).toEqual({ content: 'hello' });
+  });
+
+  it('saveDiaryEntry PUTs date, name and content and tolerates 204', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: true, status: 204 });
+    await saveDiaryEntry('tok-abc', '2026-03-05', 'a.txt', 'new');
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe('/api/diary/entries');
+    expect(options.method).toBe('PUT');
+    expect(JSON.parse(options.body)).toEqual({ date: '2026-03-05', name: 'a.txt', content: 'new' });
+  });
+
+  it('throws ApiError on a non-ok response', async () => {
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({ ok: false, status: 503 });
+    await expect(getDiaryTree('tok-abc')).rejects.toMatchObject({ status: 503 });
   });
 });
