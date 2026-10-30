@@ -52,6 +52,7 @@ func main() {
 		ProjectsSvcURL:     cfg.ProjectsSvcURL,
 		ReportsRoot:        cfg.SoulmanRoot,
 		ObsidianRoot:       cfg.ObsidianRoot,
+		DiaryRoot:          cfg.DiaryRoot,
 		ClaudeProjectRoots: claudeRoots,
 		FileBrowserRoots:   fileBrowserRoots,
 		ShareLinkSecret:    shareLinkSecret,

@@ -46,6 +46,7 @@
     "action_svc_url": "http://localhost:9004",
     "projects_svc_url": "http://localhost:9006",
     "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian",
+    "diary_root": "G:\\My Drive\\diary",
     "claude_project_roots": [
       { "label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian" },
       { "label": "IdeaProjects", "path": "C:\\Users\\Lenovo\\IdeaProjects" },

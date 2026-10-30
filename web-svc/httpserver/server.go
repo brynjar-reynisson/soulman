@@ -31,6 +31,7 @@ type Config struct {
 	ProjectsSvcURL     string
 	ReportsRoot        string
 	ObsidianRoot       string
+	DiaryRoot          string
 	ClaudeProjectRoots []claudesession.Root
 	FileBrowserRoots   []filebrowser.Root
 	ShareLinkSecret    []byte

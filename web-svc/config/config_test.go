@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ const validConfigJSON = `{
     "action_svc_url": "http://localhost:9014",
     "projects_svc_url": "http://localhost:9016",
     "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian",
+    "diary_root": "G:\\My Drive\\diary",
     "claude_project_roots": [
       {"label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian"}
     ],
@@ -269,6 +271,41 @@ func TestLoad_MissingObsidianRoot_ReturnsError(t *testing.T) {
 	}
 }
 
+func TestLoad_PopulatesDiaryRoot(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, validConfigJSON)
+	os.Setenv("CONFIG_PATH", path)
+	os.Setenv("SUPABASE_URL", "https://example.supabase.co")
+	os.Setenv("SUPABASE_JWT_SECRET", "shh")
+	defer os.Unsetenv("CONFIG_PATH")
+	defer os.Unsetenv("SUPABASE_URL")
+	defer os.Unsetenv("SUPABASE_JWT_SECRET")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.DiaryRoot != "G:\\My Drive\\diary" {
+		t.Errorf("DiaryRoot = %q", cfg.DiaryRoot)
+	}
+}
+
+func TestLoad_MissingDiaryRoot_ReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	incomplete := strings.Replace(validConfigJSON, `"diary_root": "G:\\My Drive\\diary"`, `"diary_root": ""`, 1)
+	path := writeConfigFile(t, dir, incomplete)
+	os.Setenv("CONFIG_PATH", path)
+	os.Setenv("SUPABASE_URL", "https://example.supabase.co")
+	os.Setenv("SUPABASE_JWT_SECRET", "shh")
+	defer os.Unsetenv("CONFIG_PATH")
+	defer os.Unsetenv("SUPABASE_URL")
+	defer os.Unsetenv("SUPABASE_JWT_SECRET")
+
+	if _, err := config.Load(); err == nil {
+		t.Fatal("Load() error = nil, want an error when web.diary_root is blank")
+	}
+}
+
 func TestLoad_PopulatesClaudeProjectRoots(t *testing.T) {
 	dir := t.TempDir()
 	path := writeConfigFile(t, dir, validConfigJSON)
@@ -293,7 +330,7 @@ func TestLoad_PopulatesClaudeProjectRoots(t *testing.T) {
 
 func TestLoad_MissingClaudeProjectRoots_ReturnsError(t *testing.T) {
 	dir := t.TempDir()
-	incomplete := `{"web": {"owner_email": "breynisson@gmail.com", "cors_allowed_origin": "http://localhost:5178", "perception_svc_url": "http://localhost:9011", "memory_svc_url": "http://localhost:9012", "thinking_svc_url": "http://localhost:9013", "action_svc_url": "http://localhost:9014", "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian", "claude_project_roots": []}}`
+	incomplete := `{"web": {"owner_email": "breynisson@gmail.com", "cors_allowed_origin": "http://localhost:5178", "perception_svc_url": "http://localhost:9011", "memory_svc_url": "http://localhost:9012", "thinking_svc_url": "http://localhost:9013", "action_svc_url": "http://localhost:9014", "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian", "diary_root": "G:\\My Drive\\diary", "claude_project_roots": []}}`
 	path := writeConfigFile(t, dir, incomplete)
 	os.Setenv("CONFIG_PATH", path)
 	os.Setenv("SUPABASE_URL", "https://example.supabase.co")
@@ -331,7 +368,7 @@ func TestLoad_PopulatesFileBrowserRoots(t *testing.T) {
 
 func TestLoad_MissingFileBrowserRoots_ReturnsError(t *testing.T) {
 	dir := t.TempDir()
-	incomplete := `{"web": {"owner_email": "breynisson@gmail.com", "cors_allowed_origin": "http://localhost:5178", "perception_svc_url": "http://localhost:9011", "memory_svc_url": "http://localhost:9012", "thinking_svc_url": "http://localhost:9013", "action_svc_url": "http://localhost:9014", "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian", "claude_project_roots": [{"label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian"}], "file_browser_roots": []}}`
+	incomplete := `{"web": {"owner_email": "breynisson@gmail.com", "cors_allowed_origin": "http://localhost:5178", "perception_svc_url": "http://localhost:9011", "memory_svc_url": "http://localhost:9012", "thinking_svc_url": "http://localhost:9013", "action_svc_url": "http://localhost:9014", "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian", "diary_root": "G:\\My Drive\\diary", "claude_project_roots": [{"label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian"}], "file_browser_roots": []}}`
 	path := writeConfigFile(t, dir, incomplete)
 	os.Setenv("CONFIG_PATH", path)
 	os.Setenv("SUPABASE_URL", "https://example.supabase.co")
@@ -366,7 +403,7 @@ func TestLoad_ShareLinkTTLDefaultsTo60Minutes(t *testing.T) {
 
 func TestLoad_ShareLinkTTLMinutesOverride(t *testing.T) {
 	dir := t.TempDir()
-	withTTL := `{"web": {"owner_email": "breynisson@gmail.com", "cors_allowed_origin": "http://localhost:5178", "perception_svc_url": "http://localhost:9011", "memory_svc_url": "http://localhost:9012", "thinking_svc_url": "http://localhost:9013", "action_svc_url": "http://localhost:9014", "projects_svc_url": "http://localhost:9016", "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian", "claude_project_roots": [{"label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian"}], "file_browser_roots": [{"label": "Documents", "path": "C:\\Users\\Lenovo\\Documents"}], "share_link_ttl_minutes": 15}}`
+	withTTL := `{"web": {"owner_email": "breynisson@gmail.com", "cors_allowed_origin": "http://localhost:5178", "perception_svc_url": "http://localhost:9011", "memory_svc_url": "http://localhost:9012", "thinking_svc_url": "http://localhost:9013", "action_svc_url": "http://localhost:9014", "projects_svc_url": "http://localhost:9016", "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian", "diary_root": "G:\\My Drive\\diary", "claude_project_roots": [{"label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian"}], "file_browser_roots": [{"label": "Documents", "path": "C:\\Users\\Lenovo\\Documents"}], "share_link_ttl_minutes": 15}}`
 	path := writeConfigFile(t, dir, withTTL)
 	os.Setenv("CONFIG_PATH", path)
 	os.Setenv("SUPABASE_URL", "https://example.supabase.co")
@@ -427,7 +464,7 @@ func TestLoad_BraveSearchAPIKeyEnvOverride(t *testing.T) {
 
 func TestLoad_MissingProjectsSvcURL_ReturnsError(t *testing.T) {
 	dir := t.TempDir()
-	incomplete := `{"web": {"owner_email": "breynisson@gmail.com", "cors_allowed_origin": "http://localhost:5178", "perception_svc_url": "http://localhost:9011", "memory_svc_url": "http://localhost:9012", "thinking_svc_url": "http://localhost:9013", "action_svc_url": "http://localhost:9014", "projects_svc_url": "", "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian", "claude_project_roots": [{"label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian"}], "file_browser_roots": [{"label": "Documents", "path": "C:\\Users\\Lenovo\\Documents"}]}}`
+	incomplete := `{"web": {"owner_email": "breynisson@gmail.com", "cors_allowed_origin": "http://localhost:5178", "perception_svc_url": "http://localhost:9011", "memory_svc_url": "http://localhost:9012", "thinking_svc_url": "http://localhost:9013", "action_svc_url": "http://localhost:9014", "projects_svc_url": "", "obsidian_root": "C:\\Users\\Lenovo\\Documents\\obsidian", "diary_root": "G:\\My Drive\\diary", "claude_project_roots": [{"label": "Obsidian", "path": "C:\\Users\\Lenovo\\Documents\\obsidian"}], "file_browser_roots": [{"label": "Documents", "path": "C:\\Users\\Lenovo\\Documents"}]}}`
 	path := writeConfigFile(t, dir, incomplete)
 	os.Setenv("CONFIG_PATH", path)
 	os.Setenv("SUPABASE_URL", "https://example.supabase.co")

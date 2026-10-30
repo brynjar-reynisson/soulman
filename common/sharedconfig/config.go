@@ -191,6 +191,7 @@ type WebConfig struct {
 	ActionSvcURL       string              `json:"action_svc_url"`
 	ProjectsSvcURL     string              `json:"projects_svc_url"`
 	ObsidianRoot       string              `json:"obsidian_root"`
+	DiaryRoot          string              `json:"diary_root"`
 	ClaudeProjectRoots []ClaudeProjectRoot `json:"claude_project_roots"`
 	FileBrowserRoots   []FileBrowserRoot   `json:"file_browser_roots"`
 	// ShareLinkTTLMinutes is how long a generated share link

@@ -21,6 +21,7 @@ type Config struct {
 	ProjectsSvcURL     string
 	SoulmanRoot        string
 	ObsidianRoot       string
+	DiaryRoot          string
 	ClaudeProjectRoots []sharedconfig.ClaudeProjectRoot
 	FileBrowserRoots   []sharedconfig.FileBrowserRoot
 	ShareLinkTTL       time.Duration
@@ -57,6 +58,9 @@ func Load() (*Config, error) {
 	}
 	if shared.Web.ObsidianRoot == "" {
 		return nil, fmt.Errorf("shared config %s has no web.obsidian_root configured", configPath)
+	}
+	if shared.Web.DiaryRoot == "" {
+		return nil, fmt.Errorf("shared config %s has no web.diary_root configured", configPath)
 	}
 	if len(shared.Web.ClaudeProjectRoots) == 0 {
 		return nil, fmt.Errorf("shared config %s has no web.claude_project_roots configured", configPath)
@@ -95,6 +99,7 @@ func Load() (*Config, error) {
 		ProjectsSvcURL:     shared.Web.ProjectsSvcURL,
 		SoulmanRoot:        env("SOULMAN_ROOT", `C:\Users\Lenovo\soulman-prod`),
 		ObsidianRoot:       shared.Web.ObsidianRoot,
+		DiaryRoot:          shared.Web.DiaryRoot,
 		ClaudeProjectRoots: shared.Web.ClaudeProjectRoots,
 		FileBrowserRoots:   shared.Web.FileBrowserRoots,
 		ShareLinkTTL:       shareLinkTTL,
