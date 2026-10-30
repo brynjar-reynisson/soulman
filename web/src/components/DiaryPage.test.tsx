@@ -127,6 +127,33 @@ describe('DiaryPage', () => {
     expect(screen.getByLabelText('New entry')).toHaveValue('');
   });
 
+  it('Enter in the new-entry box saves the entry and does not insert a newline', async () => {
+    mockCreate.mockResolvedValue({ date: '2026-03-05', name: 'c.txt', time: '20:00' });
+    await renderPage();
+    await screen.findByRole('button', { name: /2026/ });
+    await userEvent.type(screen.getByLabelText('New entry'), 'dear diary{Enter}');
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockCreate).toHaveBeenCalledWith('tok-abc', 'dear diary');
+  });
+
+  it('Shift+Enter inserts a newline and does not save', async () => {
+    await renderPage();
+    await screen.findByRole('button', { name: /2026/ });
+    const box = screen.getByLabelText('New entry');
+    await userEvent.type(box, 'line one{Shift>}{Enter}{/Shift}line two');
+    expect(box).toHaveValue('line one\nline two');
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('Enter on blank text does not save and does not add a newline', async () => {
+    await renderPage();
+    await screen.findByRole('button', { name: /2026/ });
+    const box = screen.getByLabelText('New entry');
+    await userEvent.type(box, '  {Enter}');
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(box).toHaveValue('  ');
+  });
+
   it('Save is disabled while the new-entry text is blank', async () => {
     await renderPage();
     await screen.findByRole('button', { name: /2026/ });

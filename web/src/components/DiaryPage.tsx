@@ -237,6 +237,14 @@ export function DiaryPage({ onBack }: { onBack: () => void }) {
           id="diary-new"
           value={newText}
           onChange={(e) => setNewText(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter saves, Shift+Enter inserts a newline. Skip while an IME
+            // composition is in progress so confirming a candidate with Enter
+            // doesn't submit the entry.
+            if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+            e.preventDefault();
+            if (!saving && newText.trim() !== '') handleCreate();
+          }}
           rows={4}
           className="w-full rounded border border-gray-300 p-2 text-sm"
         />
