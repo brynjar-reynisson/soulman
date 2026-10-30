@@ -118,3 +118,13 @@ Worth knowing if this is ever touched: the redaction *has* to be a routing decis
 ### Launched sessions pinned to the home profile, directory pre-trusted (fixed 2026-10-07)
 
 `claudesession.Launch` (and `projects-svc/launcher.Launch`) previously inherited web-svc's/projects-svc's environment verbatim. If a service was (re)started from a shell on the work profile, `CLAUDE_CONFIG_DIR` (`~/.claude-work`) leaked into the spawned `claude --bg` session, which then rejected the folder as untrusted; even on the home profile, a never-seen folder would stall on the workspace-trust dialog with nobody to answer it. `profile.go` (duplicated in both packages, per this repo's small-duplication preference) now (1) builds the child's `Env` from `os.Environ()` minus `CLAUDE_CONFIG_DIR`, so sessions always use `~/.claude` / `~/.claude.json`, and (2) sets `projects["<dir>"].hasTrustDialogAccepted = true` in `~/.claude.json` (forward-slash key, atomic temp+rename, no-op if already trusted). A trust-write failure only logs a warning; the launch proceeds. Known risk: read-modify-write on a file live Claude sessions also write — a concurrent write in that tiny window can be lost. Not covered by automated tests beyond the helpers (same no-real-spawn boundary as above). The launch form's session-name input also now launches on Enter.
+
+## Diary (added 2026-10-30)
+
+See `docs/superpowers/specs/2026-10-30-diary-design.md`. `GET /api/diary/tree`, `GET/POST/PUT /api/diary/entries` read and write plain `.txt` files under `web.diary_root` (default `G:\My Drive\diary`), laid out `<YYYY>\<MM>\<DD>\entry-HH-MM-SS.txt`.
+
+- **Google Drive for Desktop dependency.** The `G:` mount is provided by Drive for Desktop. `web-svc` starts fine without it (no startup check), but every diary request then returns `503` until the mount is back; nothing else in the service is affected.
+- **Time is written as `HH-MM-SS`**, not `HH:MM:SS`, because colons are illegal in Windows filenames.
+- **Sync latency to other devices is Drive's**, not ours: an entry written here shows up on the phone whenever Drive syncs it, and vice versa.
+- **The old Android app still writes the old layout** (`<YYYY>\<MM>\entry-DD-HH MM SS.txt`, time separated by spaces). Those files are not shown by the dashboard until moved; re-run the migration script whenever the app has added new ones.
+- **Migration:** `powershell -File scripts\migrate-diary-layout.ps1 [-Root <dir>] [-WhatIf]` moves old-layout files into day folders (separators `:`, space or `-` accepted), skips files already in a day folder, refuses to overwrite an existing destination (warns and skips), and prints one line per move. Always run with `-WhatIf` first.
