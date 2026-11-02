@@ -36,19 +36,26 @@ type Config struct {
 	FileBrowserRoots   []filebrowser.Root
 	ShareLinkSecret    []byte
 	ShareLinkTTL       time.Duration
-	BraveSearchAPIKey  string
+	// VideoRoot is the folder the video player browses. VideoShareSecret
+	// signs video tokens; unlike ShareLinkSecret it must persist across
+	// restarts, since video links are meant to live for days.
+	VideoRoot         string
+	VideoShareSecret  []byte
+	VideoShareTTL     time.Duration
+	BraveSearchAPIKey string
 	// BraveSearchBaseURL overrides websearch.DefaultBaseURL when non-empty.
 	// Production leaves this blank; tests set it to an httptest.Server URL.
 	BraveSearchBaseURL string
 }
 
 type Server struct {
-	port         string
-	cfg          Config
-	verifier     *auth.Verifier
-	httpClient   *http.Client
-	searchClient *websearch.Client
-	router       chi.Router
+	port          string
+	cfg           Config
+	verifier      *auth.Verifier
+	httpClient    *http.Client
+	searchClient  *websearch.Client
+	videoFailures *failureLimiter
+	router        chi.Router
 }
 
 func New(port string, cfg Config, verifier *auth.Verifier) *Server {
@@ -57,11 +64,12 @@ func New(port string, cfg Config, verifier *auth.Verifier) *Server {
 		baseURL = websearch.DefaultBaseURL
 	}
 	s := &Server{
-		port:         port,
-		cfg:          cfg,
-		verifier:     verifier,
-		httpClient:   &http.Client{Timeout: 5 * time.Second},
-		searchClient: websearch.NewClient(cfg.BraveSearchAPIKey, baseURL),
+		port:          port,
+		cfg:           cfg,
+		verifier:      verifier,
+		httpClient:    &http.Client{Timeout: 5 * time.Second},
+		searchClient:  websearch.NewClient(cfg.BraveSearchAPIKey, baseURL),
+		videoFailures: newFailureLimiter(20, time.Minute),
 	}
 	s.router = s.buildRouter()
 	return s
@@ -112,6 +120,8 @@ func (s *Server) buildRouter() chi.Router {
 		r.Post("/api/files/upload", s.filesUpload)
 		r.Post("/api/files/share", s.filesShare)
 		r.Get("/api/search", s.search)
+		r.Get("/api/videos/list", s.videosList)
+		r.Post("/api/videos/token", s.videosToken)
 		r.Get("/api/projects/projects", s.proxyProjects(projectsPath))
 		r.Post("/api/projects/projects", s.proxyProjects(projectsPath))
 		r.Put("/api/projects/projects/{name}", s.proxyProjects(projectByName))
@@ -122,6 +132,8 @@ func (s *Server) buildRouter() chi.Router {
 	})
 
 	r.Get("/dl/{token}", s.shareDownload)
+	r.Get("/vid/{token}/info", s.videoInfo)
+	r.Get("/vid/{token}/stream", s.videoStream)
 
 	return r
 }
@@ -162,7 +174,7 @@ func requestLogger(next http.Handler) http.Handler {
 	searchLogged := searchQueryLogger(next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case strings.HasPrefix(r.URL.Path, shareDownloadPrefix):
+		case strings.HasPrefix(r.URL.Path, shareDownloadPrefix), strings.HasPrefix(r.URL.Path, videoPathPrefix):
 			shareLogged.ServeHTTP(w, r)
 		case r.URL.Path == searchPath:
 			searchLogged.ServeHTTP(w, r)
@@ -177,12 +189,16 @@ func requestLogger(next http.Handler) http.Handler {
 // standard logger) rather than chi's stdlib-log formatter.
 func shareDownloadLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		redactedPath := redactedSharePath
+		if strings.HasPrefix(r.URL.Path, videoPathPrefix) {
+			redactedPath = "/vid/<redacted>"
+		}
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		start := time.Now()
 		defer func() {
 			slog.Info("share link request",
 				"method", r.Method,
-				"path", redactedSharePath,
+				"path", redactedPath,
 				"status", ww.Status(),
 				"bytes", ww.BytesWritten(),
 				"duration", time.Since(start).String(),

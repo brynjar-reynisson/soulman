@@ -57,7 +57,9 @@
       { "label": "Downloads", "path": "C:\\Users\\Lenovo\\Downloads" },
       { "label": "Pictures", "path": "C:\\Users\\Lenovo\\Pictures" }
     ],
-    "share_link_ttl_minutes": 60
+    "share_link_ttl_minutes": 60,
+    "video_root": "C:\\Users\\Lenovo\\Documents\\videos",
+    "video_share_ttl_minutes": 10080
   },
   "school": {
     "enabled": true,

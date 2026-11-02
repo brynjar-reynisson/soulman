@@ -9,7 +9,7 @@ vi.mock('./RawInputsPanel', () => ({ RawInputsPanel: () => null }));
 vi.mock('./ReportsPanel', () => ({ ReportsPanel: () => null }));
 
 describe('Dashboard', () => {
-  it('Diary link appears right after Projects and calls onOpenDiary', async () => {
+  it('links are alphabetical with Sign out last, and Diary calls onOpenDiary', async () => {
     const onOpenDiary = vi.fn();
     render(
       <Dashboard
@@ -21,10 +21,11 @@ describe('Dashboard', () => {
         onOpenSearch={vi.fn()}
         onOpenProjects={vi.fn()}
         onOpenDiary={onOpenDiary}
+        onOpenVideos={vi.fn()}
       />,
     );
     const names = screen.getAllByRole('button').map((b) => b.textContent);
-    expect(names.indexOf('Diary')).toBe(names.indexOf('Projects') + 1);
+    expect(names).toEqual(['Claude', 'Diary', 'Files', 'Obsidian', 'Projects', 'Videos', 'Web-Search', 'Sign out']);
     await userEvent.click(screen.getByRole('button', { name: 'Diary' }));
     expect(onOpenDiary).toHaveBeenCalled();
   });

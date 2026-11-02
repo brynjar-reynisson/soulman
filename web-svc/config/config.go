@@ -25,6 +25,8 @@ type Config struct {
 	ClaudeProjectRoots []sharedconfig.ClaudeProjectRoot
 	FileBrowserRoots   []sharedconfig.FileBrowserRoot
 	ShareLinkTTL       time.Duration
+	VideoRoot          string
+	VideoShareTTL      time.Duration
 	BraveSearchAPIKey  string
 }
 
@@ -86,6 +88,15 @@ func Load() (*Config, error) {
 		shareLinkTTL = 60 * time.Minute
 	}
 
+	videoRoot := shared.Web.VideoRoot
+	if videoRoot == "" {
+		videoRoot = `C:\Users\Lenovo\Documents\videos`
+	}
+	videoShareTTL := time.Duration(shared.Web.VideoShareTTLMinutes) * time.Minute
+	if videoShareTTL <= 0 {
+		videoShareTTL = 7 * 24 * time.Hour
+	}
+
 	return &Config{
 		HTTPPort:           env("HTTP_PORT", "9005"),
 		SupabaseURL:        supabaseURL,
@@ -103,6 +114,8 @@ func Load() (*Config, error) {
 		ClaudeProjectRoots: shared.Web.ClaudeProjectRoots,
 		FileBrowserRoots:   shared.Web.FileBrowserRoots,
 		ShareLinkTTL:       shareLinkTTL,
+		VideoRoot:          videoRoot,
+		VideoShareTTL:      videoShareTTL,
 		BraveSearchAPIKey:  env("BRAVE_SEARCH_API_KEY", ""),
 	}, nil
 }

@@ -386,3 +386,49 @@ export const updatePromptState = (
   id: number,
   state: Prompt['state'],
 ): Promise<void> => mutateJSON('PUT', `/api/projects/prompts/${id}`, token, { state });
+
+export interface VideoListing {
+  folders: string[];
+  files: FileEntry[];
+}
+
+export const listVideos = (token: string | null, path: string): Promise<VideoListing> =>
+  getJSON(`/api/videos/list?path=${encodeURIComponent(path)}`, token);
+
+export interface VideoToken {
+  token: string;
+  name: string;
+  expiresAt: string;
+}
+
+// Issues the signed token for one video. The owner's player streams from
+// /vid/<token>/stream and the same token is the shareable link.
+export async function getVideoToken(
+  token: string | null,
+  path: string,
+  file: string,
+): Promise<VideoToken> {
+  const response = await fetch(
+    `/api/videos/token?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}`,
+    { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {} },
+  );
+  if (!response.ok) {
+    throw new ApiError(response.status, `video token failed (${response.status})`);
+  }
+  return response.json();
+}
+
+// Public (no Authorization): the token in the URL is the credential.
+export async function getPublicVideoInfo(videoToken: string): Promise<{ name: string }> {
+  const response = await fetch(`/vid/${encodeURIComponent(videoToken)}/info`);
+  if (!response.ok) {
+    throw new ApiError(response.status, `video info failed (${response.status})`);
+  }
+  return response.json();
+}
+
+export const videoStreamUrl = (videoToken: string): string =>
+  `/vid/${encodeURIComponent(videoToken)}/stream`;
+
+export const videoShareUrl = (videoToken: string): string =>
+  `${window.location.origin}/?v=${encodeURIComponent(videoToken)}`;

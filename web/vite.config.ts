@@ -10,6 +10,7 @@ export default defineConfig({
     proxy: {
       '/api': { target: 'http://localhost:9005', changeOrigin: true },
       '/dl': { target: 'http://localhost:9005', changeOrigin: true },
+      '/vid': { target: 'http://localhost:9005', changeOrigin: true },
     },
   },
   preview: {
@@ -19,6 +20,7 @@ export default defineConfig({
     proxy: {
       '/api': { target: 'http://localhost:9005', changeOrigin: true },
       '/dl': { target: 'http://localhost:9005', changeOrigin: true },
+      '/vid': { target: 'http://localhost:9005', changeOrigin: true },
     },
   },
   test: {

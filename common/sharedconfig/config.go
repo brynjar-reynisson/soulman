@@ -200,6 +200,12 @@ type WebConfig struct {
 	// DoNotDisturb's Start/End (not a fatal validation error). See
 	// docs/superpowers/specs/2026-08-19-file-sharing-design.md.
 	ShareLinkTTLMinutes int `json:"share_link_ttl_minutes"`
+	// VideoRoot is the folder the video player page browses. Optional —
+	// blank defaults to Documents\videos in web-svc/config.Load.
+	// VideoShareTTLMinutes is how long a video link (play or share) stays
+	// valid; zero or absent defaults to 7 days.
+	VideoRoot            string `json:"video_root"`
+	VideoShareTTLMinutes int    `json:"video_share_ttl_minutes"`
 }
 
 // Load reads and parses the JSON config file at path. An empty or missing

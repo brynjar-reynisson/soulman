@@ -13,6 +13,7 @@ export function Dashboard({
   onOpenSearch,
   onOpenProjects,
   onOpenDiary,
+  onOpenVideos,
 }: {
   initialStatus: ServiceStatus | null;
   onSignOut: () => void;
@@ -22,26 +23,30 @@ export function Dashboard({
   onOpenSearch: () => void;
   onOpenProjects: () => void;
   onOpenDiary: () => void;
+  onOpenVideos: () => void;
 }) {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Soulman Dashboard</h1>
         <div className="flex items-center gap-4">
-          <button onClick={onOpenProjects} className="text-sm text-gray-500 underline">
-            Projects
+          <button onClick={onOpenClaude} className="text-sm text-gray-500 underline">
+            Claude
           </button>
           <button onClick={onOpenDiary} className="text-sm text-gray-500 underline">
             Diary
           </button>
-          <button onClick={onOpenClaude} className="text-sm text-gray-500 underline">
-            Claude
+          <button onClick={onOpenFiles} className="text-sm text-gray-500 underline">
+            Files
           </button>
           <button onClick={onOpenObsidian} className="text-sm text-gray-500 underline">
             Obsidian
           </button>
-          <button onClick={onOpenFiles} className="text-sm text-gray-500 underline">
-            Files
+          <button onClick={onOpenProjects} className="text-sm text-gray-500 underline">
+            Projects
+          </button>
+          <button onClick={onOpenVideos} className="text-sm text-gray-500 underline">
+            Videos
           </button>
           <button onClick={onOpenSearch} className="text-sm text-gray-500 underline">
             Web-Search

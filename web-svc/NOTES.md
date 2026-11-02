@@ -129,3 +129,14 @@ See `docs/superpowers/specs/2026-10-30-diary-design.md`. `GET /api/diary/tree`, 
 - **The old Android app still writes the old layout** (`<YYYY>\<MM>\entry-DD-HH MM SS.txt`, time separated by spaces). Those files are not shown by the dashboard until moved; re-run the migration script whenever the app has added new ones.
 - **Migration:** `powershell -File scripts\migrate-diary-layout.ps1 [-Root <dir>] [-WhatIf]` moves old-layout files into day folders (separators `:`, space or `-` accepted), skips files already in a day folder, refuses to overwrite an existing destination (warns and skips), and prints one line per move. Always run with `-WhatIf` first.
 - **Keyboard:** in the new-entry box Enter saves and Shift+Enter inserts a newline (ignored while an IME composition is active, and when the text is blank). The per-entry edit box is unchanged: Enter is a newline there, saved via the Save button.
+
+## Video player (added 2026-11-02)
+
+See `docs/superpowers/specs/2026-11-02-video-player-design.md`. The dashboard's **Videos** page browses `web.video_root` (default `C:\Users\Lenovo\Documents\videos`) as nested accordions and plays a chosen video in a page with a native HTML5 `<video controls>` player plus full-screen button and keyboard shortcuts.
+
+- **Routes.** Owner-JWT: `GET /api/videos/list?path=` (folders + video files only: mp4/m4v/webm/ogv/mov/mkv), `POST /api/videos/token?path=&file=`. **Unauthenticated, token-gated** (the second route in this service that bypasses owner-JWT, after `/dl/{token}`): `GET /vid/{token}/info`, `GET /vid/{token}/stream` (Range-capable via `http.ServeFile`).
+- **Why a token even for the owner.** A `<video>` element can't send an `Authorization` header, so the owner's player streams from `/vid/<token>/stream` too; the same token is the shareable link `https://<host>/?v=<token>`. A visitor with `?v=` gets the player only: no sign-in, no `← Soulman`, no share button, and `App` never touches Supabase for them.
+- **Links last 7 days** (`web.video_share_ttl_minutes`, default 10080) and are HMAC-signed with `sharelink`, root claim `videos`, so file-share tokens and video tokens can't be swapped. Unlike the file-share secret (random per start), the video secret is persisted at `$SOULMAN_ROOT\video-share-secret` (created on first run), because web-svc restarts on every login and links must survive that. **Deleting that file invalidates every outstanding video link** — that is the revoke switch.
+- **Rate limiting.** 20 invalid-token requests per IP per minute, then 429 (valid requests, i.e. the many Range requests of playback, never count). IP comes from `CF-Connecting-IP`, falling back to `RemoteAddr`. Tokens are unguessable, so this is a second layer, not the main defense.
+- **Logging.** `/vid/*` is redacted in the request log like `/dl/*`.
+- **Vite proxy.** `/vid` is proxied to `:9005` in `vite.config.ts` (dev and preview), next to `/dl`.

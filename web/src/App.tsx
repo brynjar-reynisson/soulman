@@ -10,9 +10,11 @@ import { FilesPage } from './components/FilesPage';
 import { SearchPage } from './components/SearchPage';
 import { ProjectsPage } from './components/ProjectsPage';
 import { DiaryPage } from './components/DiaryPage';
+import { VideosPage } from './components/VideosPage';
+import { VideoPlayerPage } from './components/VideoPlayerPage';
 import { getParam, setParams } from './urlState';
 
-type ViewState = 'loading' | 'login' | 'restricted' | 'dashboard' | 'obsidian' | 'claude' | 'files' | 'search' | 'projects' | 'diary';
+type ViewState = 'loading' | 'login' | 'restricted' | 'dashboard' | 'obsidian' | 'claude' | 'files' | 'search' | 'projects' | 'diary' | 'videos' | 'video';
 
 function viewFromPageParam(): ViewState {
   const page = getParam('page');
@@ -22,10 +24,11 @@ function viewFromPageParam(): ViewState {
   if (page === 'search') return 'search';
   if (page === 'projects') return 'projects';
   if (page === 'diary') return 'diary';
+  if (page === 'videos') return getParam('videoFile') !== null ? 'video' : 'videos';
   return 'dashboard';
 }
 
-function App() {
+function AuthedApp() {
   const { user, loading: authLoading, signIn, signOut } = useAuth();
   const [view, setView] = useState<ViewState>('loading');
   const [status, setStatus] = useState<ServiceStatus | null>(null);
@@ -123,6 +126,36 @@ function App() {
     );
   }
 
+  if (view === 'videos') {
+    return (
+      <VideosPage
+        onBack={() => {
+          setParams({ page: null, videoPath: null });
+          setView('dashboard');
+        }}
+        onSelect={(path, file) => {
+          setParams({ page: 'videos', videoPath: path || null, videoFile: file });
+          setView('video');
+        }}
+      />
+    );
+  }
+  if (view === 'video') {
+    return (
+      <VideoPlayerPage
+        source={{
+          kind: 'owner',
+          path: getParam('videoPath') ?? '',
+          file: getParam('videoFile') ?? '',
+          onBack: () => {
+            setParams({ page: null, videoPath: null, videoFile: null });
+            setView('dashboard');
+          },
+        }}
+      />
+    );
+  }
+
   return (
     <Dashboard
       initialStatus={status}
@@ -151,8 +184,20 @@ function App() {
         setParams({ page: 'diary' });
         setView('diary');
       }}
+      onOpenVideos={() => {
+        setParams({ page: 'videos' });
+        setView('videos');
+      }}
     />
   );
+}
+
+// A visitor with a share link (?v=<token>) gets the player alone — no
+// sign-in, no dashboard. The token in the URL is their only credential.
+function App() {
+  const publicToken = getParam('v');
+  if (publicToken) return <VideoPlayerPage source={{ kind: 'public', token: publicToken }} />;
+  return <AuthedApp />;
 }
 
 export default App;
