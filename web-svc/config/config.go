@@ -27,6 +27,7 @@ type Config struct {
 	ShareLinkTTL       time.Duration
 	VideoRoot          string
 	VideoShareTTL      time.Duration
+	FFmpegPath         string
 	BraveSearchAPIKey  string
 }
 
@@ -116,6 +117,7 @@ func Load() (*Config, error) {
 		ShareLinkTTL:       shareLinkTTL,
 		VideoRoot:          videoRoot,
 		VideoShareTTL:      videoShareTTL,
+		FFmpegPath:         shared.Web.FFmpegPath,
 		BraveSearchAPIKey:  env("BRAVE_SEARCH_API_KEY", ""),
 	}, nil
 }

@@ -69,6 +69,8 @@ func main() {
 		VideoRoot:          cfg.VideoRoot,
 		VideoShareSecret:   videoShareSecret,
 		VideoShareTTL:      cfg.VideoShareTTL,
+		FFmpegPath:         cfg.FFmpegPath,
+		SubtitleCacheDir:   filepath.Join(cfg.SoulmanRoot, "cache", "subtitles"),
 		BraveSearchAPIKey:  cfg.BraveSearchAPIKey,
 	}, verifier)
 

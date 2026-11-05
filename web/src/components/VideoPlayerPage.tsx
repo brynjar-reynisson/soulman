@@ -3,7 +3,10 @@ import { getAccessToken } from '../auth';
 import {
   ApiError,
   getPublicVideoInfo,
+  getVideoSubtitles,
   getVideoToken,
+  subtitleTrackUrl,
+  type SubtitleTrack,
   videoShareUrl,
   videoStreamUrl,
 } from '../api';
@@ -22,6 +25,38 @@ function describeError(err: unknown): string {
   return 'This link is invalid or the video is no longer available.';
 }
 
+// ISO 639-2 (what Matroska stores) to the BCP 47 codes <track srclang> wants.
+const LANGUAGE_CODES: Record<string, string> = {
+  eng: 'en', dan: 'da', fin: 'fi', nor: 'no', nob: 'nb', swe: 'sv', ice: 'is', isl: 'is',
+  ger: 'de', deu: 'de', fre: 'fr', fra: 'fr', spa: 'es', ita: 'it', dut: 'nl', nld: 'nl',
+  por: 'pt', pol: 'pl', rus: 'ru', jpn: 'ja', kor: 'ko', chi: 'zh', zho: 'zh',
+};
+
+// Containers like MP4 drop the track title, leaving only the language code;
+// turn "swe" into "Swedish" for the subtitle menu.
+function languageName(code: string): string | null {
+  const bcp47 = LANGUAGE_CODES[code] ?? code;
+  try {
+    const name = new Intl.DisplayNames(['en'], { type: 'language' }).of(bcp47);
+    return name && name !== bcp47 ? name : null;
+  } catch {
+    return null;
+  }
+}
+
+function trackLabel(t: SubtitleTrack): string {
+  return t.title || languageName(t.language) || t.language || `Track ${t.index + 1}`;
+}
+
+// The track to switch on automatically: the one the file flags as default,
+// otherwise English if present, otherwise none.
+function pickDefaultTrack(tracks: SubtitleTrack[]): number | null {
+  const flagged = tracks.find((t) => t.default);
+  if (flagged) return flagged.index;
+  const english = tracks.find((t) => t.language === 'eng' || t.language === 'en');
+  return english ? english.index : null;
+}
+
 type FullscreenVideo = HTMLVideoElement & { webkitEnterFullscreen?: () => void };
 
 export function VideoPlayerPage({ source }: { source: VideoPlayerSource }) {
@@ -29,8 +64,12 @@ export function VideoPlayerPage({ source }: { source: VideoPlayerSource }) {
   const [name, setName] = useState<string>(source.kind === 'owner' ? source.file : '');
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // null until the subtitle list has loaded (or failed); the <video> waits for
+  // it so a default track is present when the element is created.
+  const [tracks, setTracks] = useState<SubtitleTrack[] | null>(null);
   const videoRef = useRef<FullscreenVideo | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const defaultTrackLabel = useRef<string | null>(null);
 
   const ownerPath = source.kind === 'owner' ? source.path : null;
   const ownerFile = source.kind === 'owner' ? source.file : null;
@@ -60,6 +99,22 @@ export function VideoPlayerPage({ source }: { source: VideoPlayerSource }) {
   }, [publicToken, ownerPath, ownerFile]);
 
   useEffect(() => {
+    if (!token) return;
+    let active = true;
+    getVideoSubtitles(token)
+      .then((t) => {
+        if (!active) return;
+        const def = t.find((x) => x.index === pickDefaultTrack(t));
+        defaultTrackLabel.current = def ? trackLabel(def) : null;
+        setTracks(t);
+      })
+      .catch(() => active && setTracks([]));
+    return () => {
+      active = false;
+    };
+  }, [token]);
+
+  useEffect(() => {
     if (name) document.title = name;
   }, [name]);
 
@@ -82,6 +137,17 @@ export function VideoPlayerPage({ source }: { source: VideoPlayerSource }) {
         case 'f':
           toggleFullscreen();
           break;
+        case 'c': {
+          // Toggle captions: off if any track is showing, else the default one.
+          const list = Array.from(video.textTracks);
+          if (list.length === 0) break;
+          if (list.some((t) => t.mode === 'showing')) {
+            list.forEach((t) => (t.mode = 'disabled'));
+          } else {
+            (list.find((t) => t.label === defaultTrackLabel.current) ?? list[0]).mode = 'showing';
+          }
+          break;
+        }
         case 'm':
           video.muted = !video.muted;
           break;
@@ -139,8 +205,8 @@ export function VideoPlayerPage({ source }: { source: VideoPlayerSource }) {
         )}
       </div>
       {error && <p className="text-sm text-red-400">{error}</p>}
-      {!error && !token && <p className="text-sm text-gray-400">Loading...</p>}
-      {!error && token && (
+      {!error && (!token || tracks === null) && <p className="text-sm text-gray-400">Loading...</p>}
+      {!error && token && tracks !== null && (
         <>
           <div ref={containerRef} className="mx-auto w-full max-w-5xl overflow-hidden rounded">
             <video
@@ -153,7 +219,18 @@ export function VideoPlayerPage({ source }: { source: VideoPlayerSource }) {
               onDoubleClick={toggleFullscreen}
               onError={() => setError('This video could not be played in your browser.')}
               className="max-h-[80vh] w-full bg-black"
-            />
+            >
+              {tracks.map((t) => (
+                <track
+                  key={t.index}
+                  kind="subtitles"
+                  src={subtitleTrackUrl(token, t.index)}
+                  srcLang={LANGUAGE_CODES[t.language] ?? t.language ?? 'und'}
+                  label={trackLabel(t)}
+                  default={t.index === pickDefaultTrack(tracks)}
+                />
+              ))}
+            </video>
           </div>
           <div className="mx-auto mt-3 flex max-w-5xl items-center gap-4 text-sm">
             <button onClick={toggleFullscreen} className="text-white underline">
@@ -168,7 +245,7 @@ export function VideoPlayerPage({ source }: { source: VideoPlayerSource }) {
               </>
             )}
             <span className="ml-auto hidden text-xs text-gray-400 md:inline">
-              Space play/pause · F full screen · M mute · ←/→ seek · ↑/↓ volume
+              Space play/pause · F full screen · C captions · M mute · ←/→ seek · ↑/↓ volume
             </span>
           </div>
         </>

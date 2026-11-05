@@ -432,3 +432,25 @@ export const videoStreamUrl = (videoToken: string): string =>
 
 export const videoShareUrl = (videoToken: string): string =>
   `${window.location.origin}/?v=${encodeURIComponent(videoToken)}`;
+
+export interface SubtitleTrack {
+  index: number;
+  language: string;
+  title: string;
+  default: boolean;
+}
+
+// Text subtitle tracks embedded in the video, converted to WebVTT by web-svc
+// (browsers can't read subtitles embedded in an .mkv). Empty when there are
+// none or the server has no ffmpeg.
+export async function getVideoSubtitles(videoToken: string): Promise<SubtitleTrack[]> {
+  const response = await fetch(`/vid/${encodeURIComponent(videoToken)}/subtitles`);
+  if (!response.ok) {
+    throw new ApiError(response.status, `video subtitles failed (${response.status})`);
+  }
+  const body: { tracks?: SubtitleTrack[] } = await response.json();
+  return body.tracks ?? [];
+}
+
+export const subtitleTrackUrl = (videoToken: string, index: number): string =>
+  `/vid/${encodeURIComponent(videoToken)}/subtitles/${index}.vtt`;

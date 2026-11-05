@@ -16,6 +16,7 @@ import (
 	"soulman/web-svc/auth"
 	"soulman/web-svc/claudesession"
 	"soulman/web-svc/filebrowser"
+	"soulman/web-svc/subtitles"
 	"soulman/web-svc/websearch"
 )
 
@@ -39,9 +40,13 @@ type Config struct {
 	// VideoRoot is the folder the video player browses. VideoShareSecret
 	// signs video tokens; unlike ShareLinkSecret it must persist across
 	// restarts, since video links are meant to live for days.
-	VideoRoot         string
-	VideoShareSecret  []byte
-	VideoShareTTL     time.Duration
+	VideoRoot        string
+	VideoShareSecret []byte
+	VideoShareTTL    time.Duration
+	// FFmpegPath (blank = look on PATH) and SubtitleCacheDir configure the
+	// embedded-subtitle conversion; with no ffmpeg, videos have no subtitles.
+	FFmpegPath        string
+	SubtitleCacheDir  string
 	BraveSearchAPIKey string
 	// BraveSearchBaseURL overrides websearch.DefaultBaseURL when non-empty.
 	// Production leaves this blank; tests set it to an httptest.Server URL.
@@ -55,6 +60,7 @@ type Server struct {
 	httpClient    *http.Client
 	searchClient  *websearch.Client
 	videoFailures *failureLimiter
+	subtitles     *subtitles.Service
 	router        chi.Router
 }
 
@@ -70,6 +76,7 @@ func New(port string, cfg Config, verifier *auth.Verifier) *Server {
 		httpClient:    &http.Client{Timeout: 5 * time.Second},
 		searchClient:  websearch.NewClient(cfg.BraveSearchAPIKey, baseURL),
 		videoFailures: newFailureLimiter(20, time.Minute),
+		subtitles:     subtitles.New(cfg.FFmpegPath, cfg.SubtitleCacheDir),
 	}
 	s.router = s.buildRouter()
 	return s
@@ -134,6 +141,8 @@ func (s *Server) buildRouter() chi.Router {
 	r.Get("/dl/{token}", s.shareDownload)
 	r.Get("/vid/{token}/info", s.videoInfo)
 	r.Get("/vid/{token}/stream", s.videoStream)
+	r.Get("/vid/{token}/subtitles", s.videoSubtitles)
+	r.Get("/vid/{token}/subtitles/{file}", s.videoSubtitleFile)
 
 	return r
 }

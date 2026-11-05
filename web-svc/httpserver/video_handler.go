@@ -2,9 +2,11 @@ package httpserver
 
 import (
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -13,6 +15,7 @@ import (
 
 	"soulman/web-svc/filebrowser"
 	"soulman/web-svc/sharelink"
+	"soulman/web-svc/subtitles"
 )
 
 // videoRootLabel is the sharelink "root" claim for video tokens. Verify
@@ -193,4 +196,55 @@ func (l *failureLimiter) record(ip string) {
 	now := time.Now()
 	recent := l.prune(ip, now)
 	l.failures[ip] = append(recent, now)
+}
+
+// videoSubtitles lists the video's convertible subtitle tracks and starts
+// converting them in the background, so the first .vtt request (made by the
+// browser as soon as a default track is switched on) usually finds it done.
+// A video with no subtitles, or a machine with no ffmpeg, yields an empty
+// list — never an error.
+func (s *Server) videoSubtitles(w http.ResponseWriter, r *http.Request) {
+	absPath, _, ok := s.resolveVideoToken(w, r)
+	if !ok {
+		return
+	}
+	tracks, err := s.subtitles.Tracks(r.Context(), absPath)
+	if err != nil {
+		slog.Warn("listing subtitle tracks failed", "error", err)
+		tracks = nil
+	}
+	if len(tracks) > 0 {
+		s.subtitles.Warm(absPath)
+	} else {
+		tracks = []subtitles.Track{}
+	}
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	writeJSON(w, http.StatusOK, map[string]any{"tracks": tracks})
+}
+
+// videoSubtitleFile serves one converted track as WebVTT. {file} is
+// "<track index>.vtt".
+func (s *Server) videoSubtitleFile(w http.ResponseWriter, r *http.Request) {
+	absPath, _, ok := s.resolveVideoToken(w, r)
+	if !ok {
+		return
+	}
+	idx, err := strconv.Atoi(strings.TrimSuffix(chi.URLParam(r, "file"), ".vtt"))
+	if err != nil || idx < 0 || !strings.HasSuffix(chi.URLParam(r, "file"), ".vtt") {
+		writeJSONError(w, http.StatusNotFound, "not found")
+		return
+	}
+	path, err := s.subtitles.VTT(r.Context(), absPath, idx)
+	if errors.Is(err, subtitles.ErrNoSuchTrack) {
+		writeJSONError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if err != nil {
+		slog.Error("subtitle conversion failed", "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	http.ServeFile(w, r, path)
 }

@@ -206,6 +206,10 @@ type WebConfig struct {
 	// valid; zero or absent defaults to 7 days.
 	VideoRoot            string `json:"video_root"`
 	VideoShareTTLMinutes int    `json:"video_share_ttl_minutes"`
+	// FFmpegPath is the full path to ffmpeg.exe, used to expose embedded
+	// video subtitles. Optional — blank means look ffmpeg/ffprobe up on PATH;
+	// if neither is found, videos simply play without subtitles.
+	FFmpegPath string `json:"ffmpeg_path"`
 }
 
 // Load reads and parses the JSON config file at path. An empty or missing
